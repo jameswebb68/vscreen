@@ -1,8 +1,8 @@
 # vscreen — Virtual Screen Media Bridge
 
-vscreen turns a headless Chromium browser into a remotely viewable, controllable, and AI-automatable virtual screen. It captures the browser viewport via Chrome DevTools Protocol (CDP), encodes video as H.264 (default) or VP9 and audio as Opus, and delivers them over WebRTC to connected clients. Clients can send mouse and keyboard input back through a WebRTC DataChannel for full bidirectional interaction. An integrated MCP (Model Context Protocol) server exposes 63 tools for AI browser automation. Audio is also available via RTSP for external consumers.
+**Give AI agents a real browser. Watch them live. Control everything.**
 
-## How it works
+vscreen turns a headless Chromium into a remotely viewable, controllable, and AI-automatable virtual screen. It captures the browser viewport via Chrome DevTools Protocol, encodes H.264/VP9 video + Opus audio, and streams everything over WebRTC. Clients send mouse and keyboard input back through a DataChannel for full bidirectional interaction. 63 MCP tools let AI agents automate the browser programmatically.
 
 ```
  Xvfb + Chromium           vscreen                  Browser Client
@@ -29,40 +29,68 @@ vscreen turns a headless Chromium browser into a remotely viewable, controllable
                      (GStreamer, FFmpeg, VLC)
 ```
 
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start-dev-mode)
+- [Test Client](#connect-the-test-client)
+- [MCP Server (AI Automation)](#mcp-server-ai-automation)
+  - [Connection Modes](#connection-modes)
+  - [Cursor IDE Integration](#cursor-ide-integration)
+  - [Instance Locking](#instance-locking)
+  - [MCP Tool Reference](#mcp-tool-reference)
+  - [Recommended AI Workflow](#recommended-ai-workflow)
+- [CLI Reference](#cli-reference)
+- [Configuration](#configuration)
+- [REST API](#rest-api)
+- [Docker](#docker)
+- [Building from Source](#building-from-source)
+- [Code Quality](#code-quality)
+- [Project Structure](#project-structure)
+- [Architecture Documentation](#architecture-documentation)
+- [License](#license)
+
+---
+
 ## Features
 
-- **H.264 video** (default) via OpenH264 or **VP9** — selectable with `--video-codec`
-- **Opus audio** captured from PulseAudio (default 48 kHz stereo @ 128 kbps)
-- **WebRTC delivery** with automatic ICE/STUN negotiation and adaptive bitrate
-- **Bidirectional input** — mouse, keyboard, scroll, drag, right-click, clipboard forwarded to Chromium
-- **RTSP audio server** — pull-based Opus streaming for external consumers (`rtsp://host:8554/audio/{id}`)
-- **Dev mode** — single command spawns Xvfb, PulseAudio, and Chromium automatically
-- **MCP server** — 63 AI automation tools via stdio, HTTP/SSE, or stdio-proxy transport
-- **Instance locking** — lease-based ownership with exclusive/observer modes for multi-agent coordination
-- **REST API** — full programmatic instance management, screenshots, input, element discovery
-- **Full-page screenshots** — capture entire scrollable pages beyond the viewport
-- **Coordinate translation** — auto-scroll when clicking on full-page screenshot coordinates
-- **Screenshot history** — ring buffer of last 20 screenshots with metadata for AI backtracking
-- **Action session log** — timestamped history of all actions for "how did I get here" context
-- **Element discovery** — find elements by CSS selector, visible text, accessibility tree, or input attributes
-- **Smart synchronization** — wait for text, selector, URL change, or network idle
-- **Console capture** — captured browser console.log/warn/error messages
-- **Annotated screenshots** — numbered bounding boxes on interactive elements with legends
-- **Cookie/storage management** — get/set cookies, localStorage, sessionStorage
-- **Iframe support** — element discovery and click actions across cross-origin iframes
-- **Vision LLM integration** — optional vision model for identifying unlabeled UI elements (icon-only buttons)
-- **Automated captcha solving** — reCAPTCHA v2 image challenges via vision LLM
-- **Dialog/ad dismissal** — auto-dismiss cookie consent banners, GDPR overlays, video ad overlays
-- **Bearer token auth** — optional authentication via header or query parameter
-- **Prometheus metrics** — `/metrics` endpoint for monitoring
-- **Docker support** — multi-stage Dockerfile and docker-compose included
-- **Test client** — built-in browser UI with URL navigation, fullscreen, stats HUD
+**Video & Audio**
+- **H.264** (default) via OpenH264 or **VP9** — selectable with `--video-codec`
+- **Opus audio** from PulseAudio (48 kHz stereo, 128 kbps)
+- **WebRTC delivery** with ICE/STUN negotiation and adaptive bitrate
+- **RTSP audio** — pull-based streaming for VLC, GStreamer, FFmpeg
+
+**Browser Control**
+- **Bidirectional input** — mouse, keyboard, scroll, drag, right-click, clipboard
+- **Element discovery** — CSS selectors, visible text, accessibility tree, input attributes
+- **Full-page screenshots** with automatic coordinate translation
+- **Iframe support** — cross-origin element discovery and click actions
+- **Smart sync** — wait for text, selector, URL change, or network idle
+
+**AI Automation**
+- **63 MCP tools** via stdio, HTTP/SSE, or stdio-proxy transport
+- **Instance locking** — lease-based exclusive/observer modes for multi-agent coordination
+- **Annotated screenshots** — numbered bounding boxes on interactive elements
+- **Vision LLM integration** — identify unlabeled UI elements, solve reCAPTCHAs
+- **Dialog/ad dismissal** — cookie consent, GDPR overlays, video ads
+- **Screenshot history** — ring buffer of last 20 with metadata for AI backtracking
+- **Action session log** — timestamped history of all actions taken
+
+**Infrastructure**
+- **REST API** — full programmatic instance management
+- **Dev mode** — one command spawns Xvfb + PulseAudio + Chromium
+- **Docker** — multi-stage Dockerfile and docker-compose
+- **Bearer token auth** — optional, via header or query param
+- **Prometheus metrics** — `/metrics` endpoint
+- **Test client** — built-in browser UI with URL bar, fullscreen, stats HUD
 
 ---
 
 ## Quick Start (Dev Mode)
 
-Dev mode is the fastest way to get running. It spawns a virtual X11 display, PulseAudio sink, and Chromium instance automatically.
+Dev mode spawns a virtual X11 display, PulseAudio sink, and Chromium instance automatically.
 
 ### Prerequisites
 
@@ -78,79 +106,55 @@ sudo apt install -y \
 ### Build and run
 
 ```bash
-# Build the release binary
 cargo build --release -p vscreen --features pulse-audio
 
-# Start in dev mode (H.264 video by default)
+# Start in dev mode (H.264 by default)
 ./target/release/vscreen --dev
 
-# Start with VP9 video instead
+# VP9 video instead
 ./target/release/vscreen --dev --video-codec vp9
 
-# Start with a URL pre-loaded
+# Pre-load a URL
 ./target/release/vscreen --dev --dev-url "https://www.youtube.com"
 
-# Start with MCP server enabled (stdio)
-./target/release/vscreen --dev --mcp-stdio
-
-# Start with MCP SSE server on a separate port
+# With MCP server (SSE, recommended)
 ./target/release/vscreen --dev --mcp-sse 0.0.0.0:8451
 
-# Start with RTSP disabled
+# With MCP server (stdio)
+./target/release/vscreen --dev --mcp-stdio
+
+# Disable RTSP audio
 ./target/release/vscreen --dev --no-rtsp
 ```
 
 ### What dev mode does
 
-1. **Starts Xvfb** — a virtual X11 display (default `:99`) at 1920x1080x24
-2. **Creates a PulseAudio null-sink** — named `vscreen_dev_99` for audio capture
-3. **Launches Chromium** — headless, with remote debugging on port 9222, using the virtual display
+1. **Starts Xvfb** — virtual X11 display (`:99`) at 1920x1080x24
+2. **Creates a PulseAudio null-sink** — `vscreen_dev_99` for audio capture
+3. **Launches Chromium** — headless, remote debugging on port 9222
 4. **Connects via CDP** — screencast capture begins immediately
-5. **Starts the HTTP/WS server** — on `0.0.0.0:8450` (default)
-6. **Starts the RTSP server** — on port `8554` (default, disable with `--no-rtsp`)
-7. **Creates a `dev` instance** — ready for WebRTC connections and API calls
+5. **Starts HTTP/WS server** — `0.0.0.0:8450`
+6. **Starts RTSP server** — port `8554` (disable with `--no-rtsp`)
+7. **Creates the `dev` instance** — ready for WebRTC and API calls
 
-The `dev` instance ID is always `"dev"`. All API calls and MCP tools use this ID.
+The dev instance ID is always `"dev"`.
 
 ### Connect the test client
 
 ```bash
 cd tools/test-client
-pnpm install   # or npm install
-pnpm dev       # or npx vite
+pnpm install && pnpm dev
 ```
 
-1. Open `http://localhost:5173` in your browser
-2. The signal URL defaults to `/signal/dev` — Vite proxies it to the backend
-3. Click **Connect**
-4. Type a URL in the navigation bar and click **Go**
-5. Interact with the remote browser — mouse, keyboard, scroll all work
+Open `http://localhost:5173`, click **Connect**, and you're in. Vite proxies everything to the backend on port 8450.
 
-Only port 5173 needs to be accessible — Vite proxies all API and WebSocket traffic to the vscreen backend on port 8450.
-
-### Test client features
-
-- **Video/audio playback** via WebRTC
-- **Full mouse input** — click, double-click, drag, scroll, right-click
-- **Full keyboard input** — all keys including arrows, backspace, delete, function keys
-- **Clipboard** — Ctrl+V pastes from host, copy from remote browser syncs back
-- **URL navigation bar** — type URLs and press Enter or click Go
-- **Fullscreen** — click the Fullscreen button
-- **Stats HUD** — press F2 to toggle FPS, bitrate, RTT, loss, and resolution overlay
-- **Auto-reconnect** — WebSocket drops are retried with exponential backoff
+**Test client features:** video/audio playback, full mouse + keyboard, clipboard sync, URL bar, fullscreen, stats HUD (F2), auto-reconnect.
 
 ### Receive audio externally
 
-Audio is available via RTSP at `rtsp://localhost:8554/audio/dev`. Connect with any RTSP-capable player:
-
 ```bash
-# FFmpeg
-ffplay rtsp://localhost:8554/audio/dev
-
-# VLC
-vlc rtsp://localhost:8554/audio/dev
-
-# GStreamer
+ffplay rtsp://localhost:8554/audio/dev        # FFmpeg
+vlc rtsp://localhost:8554/audio/dev           # VLC
 gst-launch-1.0 rtspsrc location=rtsp://localhost:8554/audio/dev ! decodebin ! autoaudiosink
 ```
 
@@ -158,37 +162,21 @@ gst-launch-1.0 rtspsrc location=rtsp://localhost:8554/audio/dev ! decodebin ! au
 
 ## MCP Server (AI Automation)
 
-vscreen includes a built-in MCP server that exposes 63 tools for AI browser automation. This enables AI models to control the browser programmatically: navigate, take screenshots, click elements, type text, read page content, and more.
+vscreen includes a built-in MCP server with 63 tools for AI browser automation — navigate, screenshot, click, type, read content, solve CAPTCHAs, and more.
 
 ### Connection modes
 
-vscreen supports three MCP transport modes:
+| Mode | Flag | Best for |
+|------|------|----------|
+| **SSE** (recommended) | `--mcp-sse 0.0.0.0:8451` | Cursor IDE, persistent connections |
+| **Stdio proxy** | `--mcp-stdio-proxy http://host:8451/mcp` | Clients that only support subprocess spawning |
+| **Stdio direct** | `--mcp-stdio` | When the client spawns vscreen as a subprocess |
 
-- **SSE (recommended for Cursor)**: Start the server with `--mcp-sse 0.0.0.0:8451`, then configure your MCP client with the SSE URL. The server runs independently and survives client reconnections.
-- **Stdio proxy**: For MCP clients that only support subprocess spawning, use `--mcp-stdio-proxy http://localhost:8451/mcp`. This lightweight proxy forwards messages to an existing SSE server without starting its own dev environment.
-- **Stdio direct**: `--mcp-stdio` starts the MCP server on stdin/stdout. Use when the MCP client spawns vscreen as a subprocess.
-
-**Best practice**: Start the server once with `--dev --mcp-sse`, then connect via SSE URL or stdio proxy.
-
-### Starting the MCP server
-
-```bash
-# SSE transport (recommended — persistent, survives reconnections)
-./target/release/vscreen --dev --mcp-sse 0.0.0.0:8451
-
-# stdio transport (for subprocess spawning)
-./target/release/vscreen --dev --mcp-stdio
-
-# Both transports simultaneously
-./target/release/vscreen --dev --mcp-stdio --mcp-sse 0.0.0.0:8451
-
-# Stdio proxy to an already-running SSE server (no dev mode, no pipelines)
-./target/release/vscreen --mcp-stdio-proxy http://localhost:8451/mcp
-```
+**Best practice:** Start the server once with `--dev --mcp-sse`, then connect via SSE URL or stdio proxy.
 
 ### Cursor IDE integration
 
-For connecting to an already-running vscreen with SSE (recommended):
+**SSE (recommended):**
 
 ```json
 {
@@ -200,7 +188,10 @@ For connecting to an already-running vscreen with SSE (recommended):
 }
 ```
 
-For subprocess spawning via stdio:
+<details>
+<summary>Stdio and stdio proxy configs</summary>
+
+**Stdio direct:**
 
 ```json
 {
@@ -214,7 +205,7 @@ For subprocess spawning via stdio:
 }
 ```
 
-For stdio proxy to an existing SSE server:
+**Stdio proxy to existing SSE server:**
 
 ```json
 {
@@ -228,18 +219,23 @@ For stdio proxy to an existing SSE server:
 }
 ```
 
+</details>
+
 ### Instance locking
 
 When multiple AI agents share a vscreen instance, use locking to prevent conflicts:
 
 - **Exclusive lock** — only the lock holder can perform actions
 - **Observer lock** — read-only access (screenshots, element queries)
-- Locks have a TTL and must be renewed via heartbeat (`vscreen_instance_lock_renew`)
-- In single-agent mode (`--mcp-single-agent`), lock checks are bypassed
+- Locks have a TTL and must be renewed via heartbeat
+- Single-agent mode (`--mcp-single-agent`) bypasses lock checks
 
 ### MCP tool reference
 
-#### Instance management
+63 tools organized by category. Click to expand each group.
+
+<details>
+<summary><strong>Instance management</strong> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -249,7 +245,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_instance_lock_status` | Query lock status for one or all instances |
 | `vscreen_instance_lock_renew` | Extend lock TTL (heartbeat) |
 
-#### Observation
+</details>
+
+<details>
+<summary><strong>Observation</strong> (6 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -260,7 +259,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_get_cursor_position` | Get last known mouse cursor position |
 | `vscreen_extract_text` | Extract visible text from page or specific element |
 
-#### Input actions
+</details>
+
+<details>
+<summary><strong>Input actions</strong> (13 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -278,7 +280,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_select_option` | Select dropdown option by value or label |
 | `vscreen_scroll_to_element` | Scroll element into view by CSS selector |
 
-#### Navigation
+</details>
+
+<details>
+<summary><strong>Navigation</strong> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -288,7 +293,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_reload` | Reload the current page |
 | `vscreen_click_and_navigate` | Click element and wait for URL change |
 
-#### Element discovery
+</details>
+
+<details>
+<summary><strong>Element discovery</strong> (6 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -299,7 +307,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_describe_elements` | Identify unlabeled UI elements using vision LLM |
 | `vscreen_list_frames` | List frames/iframes with bounding rectangles |
 
-#### Synchronization
+</details>
+
+<details>
+<summary><strong>Synchronization</strong> (6 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -310,7 +321,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_wait_for_url` | Wait until URL contains substring |
 | `vscreen_wait_for_network_idle` | Wait until no pending network requests |
 
-#### Memory / context
+</details>
+
+<details>
+<summary><strong>Memory & context</strong> (6 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -321,14 +335,20 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_session_log` | Get action session log (all MCP actions taken) |
 | `vscreen_session_summary` | Get condensed session summary |
 
-#### Console capture
+</details>
+
+<details>
+<summary><strong>Console capture</strong> (2 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `vscreen_console_log` | Get captured console messages (log/warn/error) |
 | `vscreen_console_clear` | Clear console buffer |
 
-#### Cookie & storage
+</details>
+
+<details>
+<summary><strong>Cookie & storage</strong> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -337,7 +357,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_get_storage` | Read localStorage/sessionStorage |
 | `vscreen_set_storage` | Write to localStorage/sessionStorage |
 
-#### Page interaction
+</details>
+
+<details>
+<summary><strong>Page interaction</strong> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -346,7 +369,10 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_dismiss_ads` | Dismiss video ad overlays (e.g. YouTube skip button) |
 | `vscreen_solve_captcha` | Automatically solve reCAPTCHA v2 image challenges (requires vision LLM) |
 
-#### Audio / RTSP
+</details>
+
+<details>
+<summary><strong>Audio / RTSP</strong> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -355,48 +381,45 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | `vscreen_audio_health` | Get audio subsystem health |
 | `vscreen_rtsp_teardown` | Force-teardown an RTSP session |
 
-#### Self-documentation
+</details>
+
+<details>
+<summary><strong>Self-documentation</strong> (2 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `vscreen_plan` | Get recommended tool sequence for a task |
 | `vscreen_help` | Get contextual help on tools, workflows, and concepts |
 
+</details>
+
 ### Recommended AI workflow
 
-The recommended flow for AI browser automation is:
-
 1. **Navigate** — `vscreen_navigate` to the target URL
-2. **Wait** — `vscreen_wait_for_idle` or `vscreen_wait` for the page to load
-3. **Observe** — `vscreen_screenshot` (or with `full_page=true`) to see the page
+2. **Wait** — `vscreen_wait_for_idle` for the page to load
+3. **Observe** — `vscreen_screenshot` to see the page
 4. **Discover** — `vscreen_find_elements` or `vscreen_find_by_text` to locate targets
 5. **Act** — `vscreen_click`, `vscreen_type`, `vscreen_key_press`
-6. **Verify** — `vscreen_wait` then `vscreen_screenshot` to confirm the result
-7. **Repeat** — continue until the task is complete
+6. **Verify** — `vscreen_screenshot` to confirm the result
+7. **Repeat**
 
-Use `vscreen_session_log` to review what actions have been taken, and `vscreen_history_get` to look back at earlier screenshots.
+Use `vscreen_session_log` to review actions taken and `vscreen_history_get` to revisit earlier screenshots.
 
 ### Full-page screenshots and coordinate translation
 
-When `full_page=true` is set on `vscreen_screenshot`, the system temporarily resizes the browser viewport to the full document height and captures the entire page in a single image. This can produce images much taller than 1080px.
-
-All click/hover/scroll tools accept **page-level coordinates** from full-page screenshots. The system automatically scrolls the page to bring the target into view before dispatching the input event — no manual coordinate conversion needed.
+When `full_page=true`, the viewport is temporarily resized to the full document height, capturing the entire page in one image. All click/hover/scroll tools accept these page-level coordinates and automatically scroll to the target before dispatching input.
 
 ### Iframe handling
 
-Cross-origin iframes (e.g., reCAPTCHA, embedded widgets) require special handling:
-
-- Use `vscreen_list_frames` to discover all iframes and their bounding rectangles
-- Use `vscreen_find_elements` or `vscreen_find_by_text` with `include_iframes=true` to search inside iframes
-- Returned coordinates are already translated to page-space and can be passed directly to `vscreen_click`
+- `vscreen_list_frames` — discover iframes and their bounding rectangles
+- `vscreen_find_elements` / `vscreen_find_by_text` with `include_iframes=true` — search inside iframes
+- Returned coordinates are page-space and work directly with `vscreen_click`
 
 ---
 
 ## CLI Reference
 
 ```
-vscreen — Virtual Screen Media Bridge
-
 Usage: vscreen [OPTIONS]
 
 Options:
@@ -415,7 +438,7 @@ Options:
       --rtsp-port <PORT>             RTSP audio server port [default: 8554]
       --no-rtsp                      Disable RTSP audio server
       --video-codec <CODEC>          Video codec: h264 (default) or vp9 [default: h264]
-      --vision-url <URL>             Vision LLM URL for element identification (Ollama/OpenAI-compatible)
+      --vision-url <URL>             Vision LLM URL (Ollama/OpenAI-compatible)
       --vision-model <MODEL>         Vision model name [default: qwen3-vl:8b]
   -h, --help                         Print help
   -V, --version                      Print version
@@ -436,16 +459,17 @@ Options:
 
 ## Configuration
 
-vscreen uses layered configuration: defaults → TOML file → environment variables → CLI flags.
+Layered: defaults → TOML file → environment variables → CLI flags.
 
-### Example `vscreen.toml`
+<details>
+<summary><strong>Example vscreen.toml</strong></summary>
 
 ```toml
 [server]
 listen = "0.0.0.0:8450"
-# auth_token = "my-secret-token"  # Uncomment to enable bearer token auth
+# auth_token = "my-secret-token"
 
-# [server.tls]  # Uncomment for built-in TLS
+# [server.tls]
 # cert_path = "/path/to/cert.pem"
 # key_path = "/path/to/key.pem"
 
@@ -459,7 +483,7 @@ framerate = 30
 bitrate_kbps = 4000
 keyframe_interval = 60
 cpu_used = 6
-codec = "h264"  # or "vp9"
+codec = "h264"
 
 [defaults.audio]
 sample_rate = 48000
@@ -478,33 +502,39 @@ level = "info"
 json = false
 ```
 
+</details>
+
 ### Authentication
 
-Set `auth_token` in the config file to enable bearer token authentication:
+Set `auth_token` in the config file:
 
 ```toml
 [server]
 auth_token = "my-secret-token"
 ```
 
-- HTTP requests: include `Authorization: Bearer my-secret-token` header
-- WebSocket connections: append `?token=my-secret-token` to the URL
-- The `/health` endpoint is exempt from authentication
+- HTTP: `Authorization: Bearer my-secret-token`
+- WebSocket: `?token=my-secret-token`
+- `/health` is exempt
 
 ---
 
 ## REST API
 
-All endpoints accept and return JSON. The server listens on `0.0.0.0:8450` by default.
+All endpoints accept and return JSON. Default: `0.0.0.0:8450`.
 
-### Server
+<details>
+<summary><strong>Server</strong></summary>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/health` | Server health check |
 | GET | `/metrics` | Prometheus metrics |
 
-### Instance CRUD
+</details>
+
+<details>
+<summary><strong>Instance CRUD</strong></summary>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -516,7 +546,10 @@ All endpoints accept and return JSON. The server listens on `0.0.0.0:8450` by de
 | POST | `/instances/{id}/navigate` | Navigate to a URL |
 | GET | `/instances/{id}/sdp` | Get RTP audio SDP descriptor |
 
-### Screenshot & observation
+</details>
+
+<details>
+<summary><strong>Screenshot & observation</strong></summary>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -525,7 +558,10 @@ All endpoints accept and return JSON. The server listens on `0.0.0.0:8450` by de
 | GET | `/instances/{id}/page` | Get page info (URL, title, viewport) |
 | GET | `/instances/{id}/cursor` | Get cursor position |
 
-### Input
+</details>
+
+<details>
+<summary><strong>Input</strong></summary>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -537,7 +573,10 @@ All endpoints accept and return JSON. The server listens on `0.0.0.0:8450` by de
 | POST | `/instances/{id}/input/drag` | Click-drag |
 | POST | `/instances/{id}/input/hover` | Move mouse |
 
-### Element discovery & navigation
+</details>
+
+<details>
+<summary><strong>Element discovery & navigation</strong></summary>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -548,7 +587,10 @@ All endpoints accept and return JSON. The server listens on `0.0.0.0:8450` by de
 | POST | `/instances/{id}/go-forward` | Navigate forward |
 | POST | `/instances/{id}/reload` | Reload page |
 
-### Memory & context
+</details>
+
+<details>
+<summary><strong>Memory & context</strong></summary>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -560,16 +602,21 @@ All endpoints accept and return JSON. The server listens on `0.0.0.0:8450` by de
 | GET | `/instances/{id}/console` | Console messages (`?level=error`) |
 | DELETE | `/instances/{id}/console` | Clear console buffer |
 
-### Audio / RTSP
+</details>
+
+<details>
+<summary><strong>Audio / RTSP</strong></summary>
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/instances/{id}/audio/streams` | List RTSP audio sessions for an instance |
-| GET | `/instances/{id}/audio/streams/{session_id}` | Get stream info and health |
+| GET | `/instances/{id}/audio/streams` | List RTSP audio sessions |
+| GET | `/instances/{id}/audio/streams/{session_id}` | Stream info and health |
 | DELETE | `/instances/{id}/audio/streams/{session_id}` | Force-teardown a session |
 | GET | `/instances/{id}/audio/health` | Audio subsystem health |
 | GET | `/rtsp/sessions` | List all RTSP sessions (global) |
 | GET | `/rtsp/health` | RTSP server health |
+
+</details>
 
 ### WebRTC signaling
 
@@ -577,48 +624,108 @@ All endpoints accept and return JSON. The server listens on `0.0.0.0:8450` by de
 WS /signal/{instance_id}
 ```
 
-The WebSocket carries JSON signaling messages: `offer`, `answer`, `ice_candidate`, `ice_complete`, `connected`, `disconnected`, `error`.
+JSON messages: `offer`, `answer`, `ice_candidate`, `ice_complete`, `connected`, `disconnected`, `error`.
 
 ---
 
 ## Docker
 
-### Build and run
-
 ```bash
+# Build and run
 docker build -t vscreen .
 docker run -p 8450:8450 vscreen
-```
 
-### With docker-compose
-
-```bash
+# docker-compose
 docker-compose up
-```
 
-### Custom start URL
-
-```bash
+# Custom start URL
 docker run -p 8450:8450 vscreen --dev-url "https://www.youtube.com"
-```
 
-### With MCP SSE enabled
-
-```bash
+# With MCP SSE
 docker run -p 8450:8450 -p 8451:8451 vscreen --mcp-sse 0.0.0.0:8451
-```
 
-### With RTSP audio exposed
-
-```bash
+# With RTSP audio exposed
 docker run -p 8450:8450 -p 8554:8554 vscreen
-```
 
-### With RTSP disabled
-
-```bash
+# Without RTSP
 docker run -p 8450:8450 vscreen --no-rtsp
 ```
+
+---
+
+## Building from Source
+
+```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# System dependencies (Debian/Ubuntu)
+sudo apt install -y \
+  build-essential cmake pkg-config libssl-dev libclang-dev \
+  libvpx-dev libopus-dev libpulse-dev
+
+# Build
+cargo build --release -p vscreen --features pulse-audio
+
+# Run tests (510+ tests across 8 crates)
+cargo test --workspace
+```
+
+<details>
+<summary>Build variants</summary>
+
+**Without PulseAudio** (CI environments):
+
+```bash
+cargo build --release -p vscreen
+```
+
+**With TLS support:**
+
+```bash
+cargo build --release -p vscreen --features "pulse-audio,tls"
+```
+
+</details>
+
+---
+
+## Code Quality
+
+~31,000 lines of Rust with strict quality enforcement.
+
+| Metric | Value |
+|--------|-------|
+| Unit tests | 380+ |
+| Async tests (`tokio::test`) | 130+ |
+| Integration test suites | 9 |
+| Fuzz targets | 3 |
+| Criterion benchmarks | 5 |
+| Source files | 71 `.rs` files across 8 crates |
+
+### Compiler and lint enforcement
+
+| Rule | Level |
+|------|-------|
+| `unsafe_code` | **forbid** (workspace-wide; `warn` in `vscreen-video` for codec FFI) |
+| `unwrap_used` | **deny** — all error paths handled explicitly |
+| `panic` | **deny** — graceful error propagation everywhere |
+| `clippy::pedantic` + `clippy::nursery` | **warn** |
+| `dbg_macro`, `print_stdout`, `print_stderr` | **deny** — structured `tracing` only |
+| Cognitive complexity threshold | **15** |
+
+### Supply chain security
+
+[`cargo-deny`](https://github.com/EmbarkStudios/cargo-deny) enforces:
+
+| Check | Policy |
+|-------|--------|
+| Known vulnerabilities | **denied** |
+| Yanked crates | **denied** |
+| Unknown registries | **denied** |
+| Unknown git sources | **denied** |
+| Dependency licenses | Only MIT, Apache-2.0, BSD, ISC, Zlib |
+| Wildcard dependencies | **denied** |
 
 ---
 
@@ -634,120 +741,21 @@ vscreen/
 │   ├── vscreen-audio/        # PulseAudio capture → Opus encode
 │   ├── vscreen-transport/    # WebRTC sessions, RTP sender
 │   ├── vscreen-rtsp/         # RTSP audio server, session management
-│   │   └── src/
-│   │       ├── server.rs     # RTSP listener and connection handler
-│   │       ├── session.rs    # Session lifecycle management
-│   │       ├── handler.rs    # RTSP method handlers (DESCRIBE, SETUP, PLAY, TEARDOWN)
-│   │       ├── parser.rs     # RTSP protocol parser
-│   │       ├── sdp.rs        # SDP generation
-│   │       ├── transport.rs  # RTP unicast transport
-│   │       ├── transcoder.rs # Audio transcoding
-│   │       ├── h264_packetizer.rs  # H.264 RTP packetizer (RFC 6184 FU-A)
-│   │       ├── vp9_packetizer.rs   # VP9 RTP packetizer
-│   │       ├── quality.rs    # Quality tier management
-│   │       └── health.rs     # Health monitoring and watchdog
-│   └── vscreen-server/       # HTTP/WS API, MCP server, instance supervisor
-│       └── src/
-│           ├── handlers.rs   # REST API handlers
-│           ├── mcp.rs        # MCP server (63 tools)
-│           ├── memory.rs     # Screenshot history, action log, console buffer
-│           ├── supervisor.rs # Instance pipeline orchestration
-│           ├── router.rs     # Route registration
-│           ├── state.rs      # Shared application state
-│           ├── ws.rs         # WebSocket signaling
-│           ├── middleware.rs # Auth, logging middleware
-│           ├── metrics.rs    # Prometheus metrics
-│           ├── lock_manager.rs  # Instance ownership and locking
-│           └── vision.rs     # Vision LLM client for element identification
+│   └── vscreen-server/       # HTTP/WS API, MCP server (63 tools), supervisor
 ├── tools/
 │   ├── test-client/          # Browser-based WebRTC test client (Vite + TS)
 │   └── integration/          # E2E integration tests (Vitest + Playwright)
-├── docs/
-│   ├── architecture/         # Detailed architecture documentation
-│   ├── discovery/            # Original design and discovery documents
-│   ├── deployment.md         # Deployment guide
-│   └── dev-mode.md           # Dev mode guide
+├── docs/                     # Architecture, deployment, dev mode docs
 ├── benches/                  # Audio and video benchmarks (Criterion)
 ├── fuzz/                     # Fuzz testing targets (cargo-fuzz)
-├── scripts/                  # Build and deployment scripts
+├── scripts/                  # Build, deployment, and fixture scripts
 ├── Dockerfile                # Multi-stage Docker build
-└── docker-compose.yml        # Docker Compose config
+└── docker-compose.yml
 ```
-
----
-
-## Building from Source
-
-```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install system dependencies (Debian/Ubuntu)
-sudo apt install -y \
-  build-essential cmake pkg-config libssl-dev libclang-dev \
-  libvpx-dev libopus-dev libpulse-dev
-
-# Build
-cargo build --release -p vscreen --features pulse-audio
-
-# Run tests (510+ tests across 8 crates)
-cargo test --workspace
-```
-
-### Build without PulseAudio
-
-For CI environments or systems without PulseAudio, omit the feature flag:
-
-```bash
-cargo build --release -p vscreen
-cargo test --workspace
-```
-
-### Build with TLS support
-
-```bash
-cargo build --release -p vscreen --features "pulse-audio,tls"
-```
-
----
-
-## Code Quality
-
-vscreen is engineered with strict quality standards across ~31,000 lines of Rust.
-
-| Metric | Value |
-|--------|-------|
-| Unit tests | 380+ |
-| Async tests (`tokio::test`) | 130+ |
-| Integration test suites | 9 |
-| Fuzz targets | 3 |
-| Criterion benchmarks | 5 |
-| Source files | 71 `.rs` files across 8 crates |
-| Lines of Rust | ~31,000 |
-
-### Compiler and lint enforcement
-
-- **`unsafe_code = "forbid"`** — unsafe code is forbidden at the workspace level (only exception: `vscreen-video` for codec FFI, set to `warn`)
-- **`clippy::pedantic`** and **`clippy::nursery`** — both enabled as warnings
-- **`unwrap_used = "deny"`** — no `.unwrap()` allowed; all error paths are handled explicitly
-- **`panic = "deny"`** — no panics; graceful error propagation everywhere
-- **`dbg_macro = "deny"`**, **`print_stdout = "deny"`**, **`print_stderr = "deny"`** — all output goes through structured `tracing` logging
-- **Cognitive complexity threshold: 15** — functions that get too complex are flagged
-
-### Supply chain security (`cargo-deny`)
-
-- Known vulnerabilities: **denied**
-- Yanked crates: **denied**
-- Unknown registries: **denied**
-- Unknown git sources: **denied**
-- License audit: only permissive licenses (MIT, Apache-2.0, BSD, ISC, Zlib) allowed in dependencies
-- Wildcard dependencies: **denied**
 
 ---
 
 ## Architecture Documentation
-
-Detailed architecture documents are in `docs/`:
 
 - [Project Structure](docs/architecture/project-structure.md) — crate layout, module boundaries
 - [Concurrency & Safety](docs/architecture/concurrency-safety.md) — race conditions, deadlock prevention
@@ -761,7 +769,7 @@ Detailed architecture documents are in `docs/`:
 
 ## License
 
-Source-Available Non-Commercial — see [LICENSE](LICENSE).
+**Source-Available Non-Commercial** — see [LICENSE](LICENSE).
 
 Copyright (c) 2025–2026 Jonathan Retting. All rights reserved.
 
