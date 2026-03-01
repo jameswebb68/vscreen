@@ -690,7 +690,7 @@ sudo apt install -y \
 # Build
 cargo build --release -p vscreen --features pulse-audio
 
-# Run tests (450+ tests across 8 crates)
+# Run tests (510+ tests across 8 crates)
 cargo test --workspace
 ```
 
@@ -708,6 +708,40 @@ cargo test --workspace
 ```bash
 cargo build --release -p vscreen --features "pulse-audio,tls"
 ```
+
+---
+
+## Code Quality
+
+vscreen is engineered with strict quality standards across ~31,000 lines of Rust.
+
+| Metric | Value |
+|--------|-------|
+| Unit tests | 380+ |
+| Async tests (`tokio::test`) | 130+ |
+| Integration test suites | 9 |
+| Fuzz targets | 3 |
+| Criterion benchmarks | 5 |
+| Source files | 71 `.rs` files across 8 crates |
+| Lines of Rust | ~31,000 |
+
+### Compiler and lint enforcement
+
+- **`unsafe_code = "forbid"`** — unsafe code is forbidden at the workspace level (only exception: `vscreen-video` for codec FFI, set to `warn`)
+- **`clippy::pedantic`** and **`clippy::nursery`** — both enabled as warnings
+- **`unwrap_used = "deny"`** — no `.unwrap()` allowed; all error paths are handled explicitly
+- **`panic = "deny"`** — no panics; graceful error propagation everywhere
+- **`dbg_macro = "deny"`**, **`print_stdout = "deny"`**, **`print_stderr = "deny"`** — all output goes through structured `tracing` logging
+- **Cognitive complexity threshold: 15** — functions that get too complex are flagged
+
+### Supply chain security (`cargo-deny`)
+
+- Known vulnerabilities: **denied**
+- Yanked crates: **denied**
+- Unknown registries: **denied**
+- Unknown git sources: **denied**
+- License audit: only permissive licenses (MIT, Apache-2.0, BSD, ISC, Zlib) allowed in dependencies
+- Wildcard dependencies: **denied**
 
 ---
 
