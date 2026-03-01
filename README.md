@@ -2,6 +2,8 @@
 
 **Give AI agents a real browser. Watch them live. Control everything.**
 
+> **[Download the latest release](https://github.com/lowjax-com/vscreen/releases/latest)** — pre-built binaries for Linux and Windows.
+
 vscreen turns a headless Chromium into a remotely viewable, controllable, and AI-automatable virtual screen. It captures the browser viewport via Chrome DevTools Protocol, encodes H.264/VP9 video + Opus audio, and streams everything over WebRTC. Clients send mouse and keyboard input back through a DataChannel for full bidirectional interaction. 63 MCP tools let AI agents automate the browser programmatically.
 
 ```
