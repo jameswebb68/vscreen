@@ -1,0 +1,16 @@
+{
+  "name": "@vscreen/test-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebRTC test client for vscreen",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "typescript": "^5.0.0"
+  }
+}

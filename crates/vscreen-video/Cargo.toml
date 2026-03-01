@@ -1,0 +1,40 @@
+[package]
+name = "vscreen-video"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+vscreen-core = { path = "../vscreen-core" }
+zune-jpeg = { workspace = true }
+dcv-color-primitives = { workspace = true }
+vpx-encode = { workspace = true }
+env-libvpx-sys = { workspace = true }
+openh264 = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+criterion = { workspace = true }
+
+[lints.rust]
+unsafe_code = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+panic = "deny"
+todo = "warn"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+large_futures = "warn"
+significant_drop_tightening = "warn"

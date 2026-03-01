@@ -1,0 +1,33 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Node
+node_modules/
+pnpm-lock.yaml
+
+# Coverage
+/coverage/
+lcov.info
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Fuzz
+fuzz/corpus/
+fuzz/artifacts/
+
+# Build artifacts
+*.log

@@ -1,0 +1,25 @@
+[package]
+name = "vscreen-rtsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+vscreen-core = { path = "../vscreen-core" }
+audiopus = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+uuid = { workspace = true }
+dashmap = { workspace = true }
+metrics = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+
+[lints]
+workspace = true

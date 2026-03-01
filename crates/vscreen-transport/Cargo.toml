@@ -1,0 +1,25 @@
+[package]
+name = "vscreen-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+vscreen-core = { path = "../vscreen-core" }
+webrtc = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tokio-stream = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+
+[lints]
+workspace = true

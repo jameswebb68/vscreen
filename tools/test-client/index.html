@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vscreen Test Client</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        h1 { margin-bottom: 16px; color: #6c63ff; font-size: 1.4em; }
+        .toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+        .toolbar-group { display: flex; gap: 8px; align-items: center; }
+        input, button, select { padding: 6px 12px; border-radius: 6px; border: 1px solid #333; font-size: 13px; }
+        input { background: #16213e; color: #e0e0e0; }
+        input.url-input { flex: 1; min-width: 250px; }
+        button { background: #6c63ff; color: white; border: none; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+        button:hover { background: #5a52d5; }
+        button:disabled { background: #444; cursor: not-allowed; }
+        button.danger { background: #c62828; }
+        button.danger:hover { background: #b71c1c; }
+        button.success { background: #2e7d32; }
+        .video-wrapper { position: relative; background: #000; border-radius: 8px; overflow: hidden; cursor: none; }
+        video { width: 100%; display: block; background: #000; }
+        .software-cursor {
+            position: absolute; pointer-events: none; z-index: 5;
+            width: 20px; height: 20px; display: none;
+            transform: translate(-2px, -2px);
+        }
+        .software-cursor svg { width: 100%; height: 100%; filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.7)); }
+        .stats-hud {
+            position: absolute; top: 8px; left: 8px; z-index: 10;
+            background: rgba(0,0,0,0.7); border-radius: 6px; padding: 8px 12px;
+            font-family: monospace; font-size: 11px; line-height: 1.6;
+            pointer-events: none; color: #ccc;
+        }
+        .stats-hud .good { color: #4caf50; }
+        .stats-hud .warn { color: #ff9800; }
+        .stats-hud .bad { color: #f44336; }
+        .video-overlay { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 10; }
+        .video-overlay button { padding: 4px 8px; font-size: 11px; background: rgba(108,99,255,0.7); }
+        .status-bar { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+        .status-item { padding: 6px 12px; background: #16213e; border-radius: 6px; font-size: 12px; }
+        .status-item.connected { border-left: 3px solid #4caf50; }
+        .status-item.disconnected { border-left: 3px solid #f44336; }
+        .status-item.stats { border-left: 3px solid #ff9800; font-family: monospace; }
+        #log { margin-top: 12px; background: #0f0f23; border-radius: 8px; padding: 12px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 11px; }
+        .log-entry { margin-bottom: 2px; }
+        .log-entry.error { color: #f44336; }
+        .log-entry.info { color: #4caf50; }
+        .volume-control { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+        .volume-control input[type="range"] { width: 80px; accent-color: #6c63ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>vscreen Test Client</h1>
+
+        <div class="toolbar">
+            <div class="toolbar-group" style="flex:1">
+                <input id="signal-url" class="url-input" type="text" placeholder="/signal/dev" value="/signal/dev" />
+                <input id="auth-token" type="password" placeholder="Auth token (optional)" style="width:140px" />
+                <button id="connect-btn" onclick="window.vscreen.connect()">Connect</button>
+                <button id="disconnect-btn" class="danger" onclick="window.vscreen.disconnect()" disabled>Disconnect</button>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <input id="nav-url" class="url-input" type="text" placeholder="https://example.com" />
+            <button id="nav-btn" onclick="window.vscreen.navigate()">Go</button>
+        </div>
+
+        <div class="video-wrapper" id="video-wrapper">
+            <video id="remote-video" autoplay playsinline></video>
+            <div class="software-cursor" id="software-cursor">
+                <svg viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1">
+                    <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L5.86 2.36a.5.5 0 0 0-.36-.15z"/>
+                </svg>
+            </div>
+            <div id="stats-hud" class="stats-hud" style="display:none">
+                <div id="hud-fps">-- fps</div>
+                <div id="hud-bitrate">-- kbps</div>
+                <div id="hud-rtt">-- ms</div>
+                <div id="hud-loss">0% loss</div>
+                <div id="hud-res">--x--</div>
+            </div>
+            <div class="video-overlay">
+                <button onclick="window.vscreen.toggleFullscreen()">Fullscreen</button>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div id="ws-status" class="status-item disconnected">WS: disconnected</div>
+            <div id="rtc-status" class="status-item disconnected">RTC: disconnected</div>
+            <div id="stats" class="status-item stats">0 fps | 0x0 | rtt: -</div>
+            <div class="volume-control">
+                <span>Vol:</span>
+                <input type="range" id="volume" min="0" max="100" value="80" oninput="window.vscreen.setVolume(this.value)" />
+                <span id="volume-label">80%</span>
+            </div>
+        </div>
+
+        <div id="log"></div>
+    </div>
+    <script type="module" src="/client.ts"></script>
+</body>
+</html>

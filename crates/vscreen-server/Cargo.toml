@@ -1,0 +1,40 @@
+[package]
+name = "vscreen-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+vscreen-core = { path = "../vscreen-core" }
+vscreen-cdp = { path = "../vscreen-cdp" }
+vscreen-video = { path = "../vscreen-video" }
+vscreen-audio = { path = "../vscreen-audio" }
+vscreen-transport = { path = "../vscreen-transport" }
+vscreen-rtsp = { path = "../vscreen-rtsp" }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+uuid = { workspace = true }
+rmcp = { workspace = true }
+schemars = { workspace = true }
+reqwest = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

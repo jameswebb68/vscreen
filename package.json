@@ -1,0 +1,60 @@
+{
+  "name": "vscreen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Virtual Screen Media Bridge — build tooling",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "cargo build --workspace",
+    "build:release": "cargo build --workspace --release",
+
+    "check": "pnpm run --parallel '/^check:.*/'",
+    "check:fmt": "cargo fmt --all -- --check",
+    "check:clippy": "cargo clippy --all-targets --all-features -- -D warnings",
+    "check:deny": "cargo deny check licenses advisories",
+    "check:udeps": "cargo +nightly udeps --all-targets",
+
+    "fix": "cargo fmt --all && cargo clippy --fix --allow-dirty --allow-staged",
+
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:unit": "cargo test --workspace --lib -- --nocapture",
+    "test:doc": "cargo test --workspace --doc",
+    "test:integration": "cargo test --workspace --test '*' -- --nocapture",
+    "test:e2e": "pnpm --filter @vscreen/integration test",
+    "test:all": "pnpm test:unit && pnpm test:doc && pnpm test:integration && pnpm test:e2e",
+
+    "bench": "cargo bench --workspace",
+    "bench:save": "cargo bench --workspace -- --save-baseline main",
+    "bench:compare": "cargo bench --workspace -- --baseline main",
+
+    "fuzz:input": "cd fuzz && cargo +nightly fuzz run input_parser -- -max_total_time=60",
+    "fuzz:cdp": "cd fuzz && cargo +nightly fuzz run cdp_message -- -max_total_time=60",
+    "fuzz:signaling": "cd fuzz && cargo +nightly fuzz run signaling_msg -- -max_total_time=60",
+    "fuzz:api": "cd fuzz && cargo +nightly fuzz run api_request -- -max_total_time=60",
+    "fuzz:all": "pnpm fuzz:input && pnpm fuzz:cdp && pnpm fuzz:signaling && pnpm fuzz:api",
+
+    "coverage": "cargo llvm-cov --workspace --lcov --output-path coverage/lcov.info",
+    "coverage:html": "cargo llvm-cov --workspace --html --output-dir coverage/html && echo 'Open coverage/html/index.html'",
+
+    "fixtures": "bash scripts/generate-fixtures.sh",
+    "clean": "cargo clean && rm -rf coverage node_modules",
+    "dev:client": "pnpm --filter @vscreen/test-client dev",
+
+    "release": "pnpm check && pnpm test:all && pnpm build:release && echo 'Release binary: target/release/vscreen'",
+
+    "precommit": "pnpm check:fmt && pnpm check:clippy && pnpm test:unit"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0"
+  },
+  "lint-staged": {
+    "*.rs": [
+      "rustfmt --edition 2024"
+    ]
+  }
+}

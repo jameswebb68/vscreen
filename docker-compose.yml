@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  vscreen:
+    build: .
+    ports:
+      - "8450:8450"
+    environment:
+      - VSCREEN_LISTEN=0.0.0.0:8450
+      - VSCREEN_LOG_LEVEL=info
+    # Optional: mount config
+    # volumes:
+    #   - ./vscreen.toml:/etc/vscreen/vscreen.toml
+    # command: ["vscreen", "--config", "/etc/vscreen/vscreen.toml", "--dev"]

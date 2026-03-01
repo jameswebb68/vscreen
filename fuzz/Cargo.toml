@@ -1,0 +1,30 @@
+[package]
+name = "vscreen-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[[bin]]
+name = "input_parser"
+path = "fuzz_targets/input_parser.rs"
+doc = false
+
+[[bin]]
+name = "cdp_message"
+path = "fuzz_targets/cdp_message.rs"
+doc = false
+
+[[bin]]
+name = "signaling_msg"
+path = "fuzz_targets/signaling_msg.rs"
+doc = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+vscreen-core = { path = "../crates/vscreen-core" }
+vscreen-cdp = { path = "../crates/vscreen-cdp" }
+vscreen-transport = { path = "../crates/vscreen-transport" }
+serde_json = "1"

@@ -1,0 +1,26 @@
+[package]
+name = "vscreen-cdp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+vscreen-core = { path = "../vscreen-core" }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+base64 = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+dashmap = { workspace = true }
+tokio-util = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+wiremock = { workspace = true }
+
+[lints]
+workspace = true

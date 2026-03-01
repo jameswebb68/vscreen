@@ -1,0 +1,103 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+version = "0.1.0"
+license = "LicenseRef-Proprietary"
+authors = ["Jonathan Retting"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+panic = "deny"
+todo = "warn"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+large_futures = "warn"
+significant_drop_tightening = "warn"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# HTTP / WebSocket
+axum = { version = "0.8", features = ["ws"] }
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+rustls = { version = "0.23", features = ["ring"], default-features = false }
+rustls-pemfile = "2"
+tower = { version = "0.5" }
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# WebSocket client (CDP)
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+futures-util = "0.3"
+
+# WebRTC
+webrtc = "0.17"
+
+# Video
+zune-jpeg = "0.5"
+dcv-color-primitives = "0.7"
+vpx-encode = { version = "0.6", features = ["vp9"] }
+env-libvpx-sys = { version = "5", features = ["generate"] }
+openh264 = "0.6"
+
+# Audio
+audiopus = "0.3.0-rc.0"
+libpulse-binding = "2.28"
+libpulse-simple-binding = "2.28"
+
+# Streams
+tokio-stream = "0.1"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Config
+toml = "0.8"
+clap = { version = "4", features = ["derive", "env"] }
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+base64 = "0.22"
+dashmap = "6"
+parking_lot = "0.12"
+bytes = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+# MCP
+rmcp = { version = "0.16", features = ["server", "client", "transport-io", "transport-streamable-http-server"] }
+schemars = "1"
+
+# HTTP client (used by MCP stdio proxy)
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+
+# Testing
+tokio-test = "0.4"
+proptest = "1"
+criterion = { version = "0.5", features = ["async_tokio"] }
+wiremock = "0.6"

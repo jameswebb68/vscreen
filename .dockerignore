@@ -1,0 +1,10 @@
+target/
+.git/
+node_modules/
+fuzz/target/
+*.md
+.cursor/
+tools/
+docs/
+scripts/
+benches/

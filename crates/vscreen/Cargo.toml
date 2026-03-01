@@ -1,0 +1,42 @@
+[package]
+name = "vscreen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "vscreen"
+path = "src/main.rs"
+
+[features]
+default = ["pulse-audio"]
+pulse-audio = ["vscreen-audio/pulse-audio"]
+tls = ["dep:axum-server", "dep:rustls-pemfile"]
+
+[dependencies]
+vscreen-core = { path = "../vscreen-core" }
+vscreen-cdp = { path = "../vscreen-cdp" }
+vscreen-video = { path = "../vscreen-video" }
+vscreen-audio = { path = "../vscreen-audio", default-features = false }
+vscreen-transport = { path = "../vscreen-transport" }
+vscreen-server = { path = "../vscreen-server" }
+vscreen-rtsp = { path = "../vscreen-rtsp" }
+tokio = { workspace = true }
+axum = { workspace = true }
+tokio-util = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+rustls = { workspace = true }
+reqwest = { workspace = true }
+futures-util = { workspace = true }
+axum-server = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+
+[lints]
+workspace = true
