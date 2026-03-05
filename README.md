@@ -4,7 +4,7 @@
 
 > **[Download the latest release](https://github.com/jameswebb68/vscreen/releases/latest)** — pre-built binaries for Linux.
 
-vscreen turns a headless Chromium into a remotely viewable, controllable, and AI-automatable virtual screen. It captures the browser viewport via Chrome DevTools Protocol, encodes H.264/VP9 video + Opus audio, and streams everything over WebRTC. Clients send mouse and keyboard input back through a DataChannel for full bidirectional interaction. 73 MCP tools let AI agents automate the browser programmatically — including the **Synthesis Bubble** system for AI-driven frontend page construction with one-shot multi-source web scraping.
+vscreen turns a headless Chromium into a remotely viewable, controllable, and AI-automatable virtual screen. It captures the browser viewport via Chrome DevTools Protocol, encodes H.264/VP9 video + Opus audio, and streams everything over WebRTC. Clients send mouse and keyboard input back through a DataChannel for full bidirectional interaction. 47 MCP tools let AI agents automate the browser programmatically — including the **Synthesis Bubble** system for AI-driven frontend page construction with one-shot multi-source web scraping.
 
 ```
  Xvfb + Chromium           vscreen                  Browser Client
@@ -32,7 +32,7 @@ vscreen turns a headless Chromium into a remotely viewable, controllable, and AI
                                                  │ SvelteKit 5 dev │
                                                  │ server (HTTPS)  │
                                                  │ AI-built pages  │
-                                                 │ 24 components   │
+                                                 │ 31 components   │
                                                  └─────────────────┘
 ```
 
@@ -85,17 +85,19 @@ vscreen turns a headless Chromium into a remotely viewable, controllable, and AI
 - **Smart sync** — wait for text, selector, URL change, or network idle
 
 **AI Automation**
-- **73 MCP tools** via stdio, HTTP/SSE, or stdio-proxy transport
+- **47 MCP tools** via stdio, HTTP/SSE, or stdio-proxy transport — consolidated from granular endpoints into powerful multi-mode tools
+- **High-level workflow tools** — `vscreen_browse`, `vscreen_observe`, `vscreen_extract`, `vscreen_interact` combine multiple steps into single calls
 - **Instance locking** — lease-based exclusive/observer modes for multi-agent coordination
 - **Annotated screenshots** — numbered bounding boxes on interactive elements
-- **Vision LLM integration** — identify unlabeled UI elements, solve reCAPTCHAs
+- **Vision LLM integration** — identify unlabeled UI elements, solve reCAPTCHAs, detect overlays
+- **Screenshot watcher** — background perceptual hash grid monitors page regions for visual changes
 - **Dialog/ad dismissal** — cookie consent, GDPR overlays, video ads
 - **Screenshot history** — ring buffer of last 20 with metadata for AI backtracking
 - **Action session log** — timestamped history of all actions taken
 - **CDP tab multiplexing** — ephemeral browser tabs for parallel operations without disturbing the main tab
 
 **Synthesis Bubble** — AI-driven frontend page construction
-- **24 Svelte 5 components** — cards, tables, charts, timelines, code blocks, and more
+- **31 Svelte 5 components** — cards, tables, charts, timelines, code blocks, and more
 - **One-shot scrape & create** — `vscreen_synthesis_scrape_and_create` scrapes multiple sites in parallel, creates a page, and navigates to it — all in a single MCP call
 - **Batch scraping** — `vscreen_synthesis_scrape_batch` scrapes multiple URLs concurrently using ephemeral CDP tabs
 - **Intelligent scraper** — standalone JS engine with JSON-LD extraction, locked image authority, ad filtering, content quality scoring, and timeout budget management
@@ -109,6 +111,11 @@ vscreen turns a headless Chromium into a remotely viewable, controllable, and AI
 - **HTTPS frontend** — SvelteKit 5 dev server on `0.0.0.0:5174`, accessible from any browser on the network
 - **Persistence** — save/load synthesized pages to disk across server restarts
 - **Multiple layouts** — `grid`, `list`, `tabs`, and `split` layouts
+
+**Browser Stealth & Isolation**
+- **Anti-detection** — `navigator.webdriver` removal, `AutomationControlled` blink feature disabled, `window.chrome` runtime injection
+- **Fingerprint spoofing** — realistic plugins, languages, permissions, WebGL renderer masking (Intel GPU strings)
+- **Per-instance isolation** — dedicated Xvfb display, unique Chromium `--user-data-dir`, separate PulseAudio null-sink
 
 **Infrastructure**
 - **Process group management** — child processes (Xvfb, Chromium) spawned in isolated process groups with `SIGTERM`/`SIGKILL` group cleanup on shutdown
@@ -196,7 +203,7 @@ gst-launch-1.0 rtspsrc location=rtsp://localhost:8554/audio/dev ! decodebin ! au
 
 ## MCP Server (AI Automation)
 
-vscreen includes a built-in MCP server with 73 tools for AI browser automation — navigate, screenshot, click, type, read content, solve CAPTCHAs, scrape websites, synthesize pages, and more.
+vscreen includes a built-in MCP server with 47 tools for AI browser automation — navigate, screenshot, click, type, read content, solve CAPTCHAs, scrape websites, synthesize pages, and more.
 
 ### Connection modes
 
@@ -266,130 +273,76 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 
 ### MCP tool reference
 
-73 tools organized by category. Click to expand each group.
+47 tools organized by category. Many tools consolidate multiple operations via `action` or `mode` parameters — fewer round-trips, more capability per call. Click to expand each group.
 
 <details>
-<summary><strong>Instance management</strong> (5 tools)</summary>
+<summary><strong>Workflow</strong> (6 tools) — high-level multi-step operations</summary>
 
 | Tool | Description |
 |------|-------------|
-| `vscreen_list_instances` | List all browser instances and their states |
-| `vscreen_instance_lock` | Acquire exclusive or observer lock on an instance |
-| `vscreen_instance_unlock` | Release lock on an instance |
-| `vscreen_instance_lock_status` | Query lock status for one or all instances |
-| `vscreen_instance_lock_renew` | Extend lock TTL (heartbeat) |
+| `vscreen_browse` | Navigate to a URL and get an overview — navigate, optionally dismiss dialogs, wait, screenshot, return page info with optional text extraction |
+| `vscreen_observe` | Show what's on the page — screenshot plus optional visible text and interactive elements summary |
+| `vscreen_extract` | Extract structured data — modes: `articles`, `table`, `kv`, `stats`, `links`, `text`, `auto` |
+| `vscreen_interact` | Perform an action: click, type, select, hover, or scroll — target by text, CSS selector, or coordinates |
+| `vscreen_synthesize` | Build/manage synthesis pages — actions: `list`, `create`, `scrape_and_create` |
+| `vscreen_solve_challenge` | Detect and handle page blockers — auto-detect or specify `captcha`, `cookie_consent`, or `ad` |
 
 </details>
 
 <details>
-<summary><strong>Observation</strong> (6 tools)</summary>
+<summary><strong>Instance & locking</strong> (2 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `vscreen_screenshot` | Capture viewport or full-page screenshot (PNG/JPEG/WebP) with optional clip region |
-| `vscreen_screenshot_sequence` | Capture N screenshots at fixed interval |
-| `vscreen_screenshot_annotated` | Screenshot with numbered bounding boxes on interactive elements |
-| `vscreen_get_page_info` | Get current URL, title, and viewport dimensions |
-| `vscreen_get_cursor_position` | Get last known mouse cursor position |
-| `vscreen_extract_text` | Extract visible text from page or specific element |
+| `vscreen_list_instances` | List all browser instances with states, supervisor status, and lock info |
+| `vscreen_lock` | Manage instance locks — actions: `acquire`, `release`, `renew`, `status` |
 
 </details>
 
 <details>
-<summary><strong>Input actions</strong> (14 tools)</summary>
+<summary><strong>Observation</strong> (7 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `vscreen_click` | Click at coordinates (auto-scrolls for full-page coords) |
+| `vscreen_screenshot` | Capture screenshot (PNG/JPEG/WebP) — supports full-page, clip region, annotated bounding boxes, and multi-frame sequences |
+| `vscreen_find` | Find elements — modes: `selector` (CSS), `text` (visible text), `input` (by placeholder/label/role). Supports `include_iframes` |
+| `vscreen_get_page_info` | Get current URL, title, viewport dimensions, and scroll position |
+| `vscreen_extract_text` | Extract all visible text from the page body |
+| `vscreen_accessibility_tree` | Get structured accessibility tree |
+| `vscreen_describe_elements` | Identify unlabeled UI elements using vision LLM |
+| `vscreen_list_frames` | List frames/iframes with bounding rectangles in page-space coordinates |
+
+</details>
+
+<details>
+<summary><strong>Input</strong> (14 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `vscreen_click` | Click at page-space coordinates (auto-scrolls into view) |
 | `vscreen_double_click` | Double-click at coordinates |
-| `vscreen_type` | Append text into focused element |
-| `vscreen_fill` | Clear field and replace with text (by selector) |
-| `vscreen_key_press` | Press a key with optional modifiers |
-| `vscreen_key_combo` | Press a key combination (e.g., Ctrl+A) |
-| `vscreen_scroll` | Scroll at position |
-| `vscreen_drag` | Click-drag between two points |
-| `vscreen_hover` | Move mouse without clicking |
-| `vscreen_batch_click` | Click multiple coordinates in one call |
-| `vscreen_click_element` | Click by CSS selector or visible text (with retries, scroll-into-view) |
-| `vscreen_click_and_navigate` | Click element and wait for URL change |
+| `vscreen_type` | Type text into the focused element character by character |
+| `vscreen_fill` | Clear and replace input field content by CSS selector |
+| `vscreen_key_press` | Press a single key (Enter, Tab, Escape, arrows, F1–F12, etc.) |
+| `vscreen_key_combo` | Press a key combination (e.g., Ctrl+A, Alt+Tab) |
+| `vscreen_scroll` | Scroll by pixel delta at a given position |
+| `vscreen_drag` | Click-drag between two points with interpolation |
+| `vscreen_hover` | Hover at coordinates (triggers CSS :hover and JS events) |
+| `vscreen_batch_click` | Click multiple points rapidly in one call |
+| `vscreen_click_element` | Click by CSS selector or visible text (main frame only) |
+| `vscreen_click_and_navigate` | Click element and wait for URL change (handles SPA pushState) |
 | `vscreen_select_option` | Select dropdown option by value or label |
 | `vscreen_scroll_to_element` | Scroll element into view by CSS selector |
 
 </details>
 
 <details>
-<summary><strong>Navigation</strong> (4 tools)</summary>
+<summary><strong>Navigation & sync</strong> (2 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `vscreen_navigate` | Navigate to a URL (with `wait_until` option) |
-| `vscreen_go_back` | Browser back button |
-| `vscreen_go_forward` | Browser forward button |
-| `vscreen_reload` | Reload the current page |
-
-</details>
-
-<details>
-<summary><strong>Element discovery</strong> (6 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `vscreen_find_elements` | Find elements by CSS selector with bounding boxes (supports `include_iframes`) |
-| `vscreen_find_by_text` | Find elements by visible text content (supports `include_iframes`) |
-| `vscreen_find_input` | Find text inputs by placeholder, aria-label, label, role, or name |
-| `vscreen_accessibility_tree` | Get structured accessibility tree |
-| `vscreen_describe_elements` | Identify unlabeled UI elements using vision LLM |
-| `vscreen_list_frames` | List frames/iframes with bounding rectangles |
-
-</details>
-
-<details>
-<summary><strong>Synchronization</strong> (6 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `vscreen_wait` | Wait for a specified duration |
-| `vscreen_wait_for_idle` | Wait until page is idle (readyState=complete) |
-| `vscreen_wait_for_text` | Wait until text appears on page |
-| `vscreen_wait_for_selector` | Wait until CSS selector matches |
-| `vscreen_wait_for_url` | Wait until URL contains substring |
-| `vscreen_wait_for_network_idle` | Wait until no pending network requests |
-
-</details>
-
-<details>
-<summary><strong>Memory & context</strong> (6 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `vscreen_history_list` | List screenshot history metadata |
-| `vscreen_history_get` | Get a historical screenshot by index |
-| `vscreen_history_get_range` | Get a range of historical screenshots |
-| `vscreen_history_clear` | Clear screenshot history |
-| `vscreen_session_log` | Get action session log (all MCP actions taken) |
-| `vscreen_session_summary` | Get condensed session summary |
-
-</details>
-
-<details>
-<summary><strong>Console capture</strong> (2 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `vscreen_console_log` | Get captured console messages (log/warn/error) |
-| `vscreen_console_clear` | Clear console buffer |
-
-</details>
-
-<details>
-<summary><strong>Cookie & storage</strong> (4 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `vscreen_get_cookies` | Get all cookies for current page |
-| `vscreen_set_cookie` | Set a cookie |
-| `vscreen_get_storage` | Read localStorage/sessionStorage |
-| `vscreen_set_storage` | Write to localStorage/sessionStorage |
+| `vscreen_navigate` | Navigate the browser — actions: `goto` (with `wait_until`), `back`, `forward`, `reload` |
+| `vscreen_wait` | Wait for a condition — `duration`, `idle`, `text`, `selector`, `url`, `network` |
 
 </details>
 
@@ -398,10 +351,32 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 
 | Tool | Description |
 |------|-------------|
-| `vscreen_execute_js` | Execute arbitrary JavaScript and return result |
-| `vscreen_dismiss_dialogs` | Dismiss cookie consent, GDPR, and similar overlays |
-| `vscreen_dismiss_ads` | Dismiss video ad overlays (e.g. YouTube skip button) |
-| `vscreen_solve_captcha` | Automatically solve reCAPTCHA v2 image challenges (requires vision LLM) |
+| `vscreen_execute_js` | Execute arbitrary JavaScript in the main frame |
+| `vscreen_dismiss_dialogs` | Auto-dismiss cookie consent, privacy, and GDPR overlays (OneTrust, CookieBot, Didomi, etc.) |
+| `vscreen_dismiss_ads` | Dismiss video platform ad overlays (YouTube skip button, pre-roll ads) |
+| `vscreen_solve_captcha` | Automatically solve reCAPTCHA v2 image challenges using 2-phase vision analysis |
+
+</details>
+
+<details>
+<summary><strong>Session & storage</strong> (5 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `vscreen_history` | Manage screenshot history — actions: `list`, `get`, `range`, `clear` |
+| `vscreen_session_log` | Get timestamped action log of all MCP actions taken |
+| `vscreen_session_summary` | Get condensed session summary with action counts and duration |
+| `vscreen_console_log` | Get captured browser console messages (log/warn/error) |
+| `vscreen_console_clear` | Clear console message buffer |
+
+</details>
+
+<details>
+<summary><strong>Storage & cookies</strong> (1 tool)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `vscreen_storage` | Read/write cookies, localStorage, and sessionStorage — `type` + `action` params |
 
 </details>
 
@@ -423,44 +398,49 @@ When multiple AI agents share a vscreen instance, use locking to prevent conflic
 | Tool | Description |
 |------|-------------|
 | `vscreen_plan` | Get recommended tool sequence for a task |
-| `vscreen_help` | Get contextual help on tools, workflows, and concepts |
+| `vscreen_help` | Get contextual help on any tool, workflow, or concept |
 
 </details>
 
 <details>
-<summary><strong>Synthesis Bubble</strong> (10 tools)</summary>
+<summary><strong>Synthesis</strong> (3 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `vscreen_synthesis_create` | Create a new synthesis page (JSON sections + components). Optional `navigate_instance` for single-step create+view |
-| `vscreen_synthesis_push` | Push data to a page section (triggers real-time SSE update) |
-| `vscreen_synthesis_update` | Update page title, theme, layout, or sections |
-| `vscreen_synthesis_delete` | Delete a synthesis page |
-| `vscreen_synthesis_list` | List all active synthesis pages |
-| `vscreen_synthesis_navigate` | Navigate browser instance to a synthesis page (auto-bypasses SSL interstitials) |
-| `vscreen_synthesis_scrape` | Scrape structured article data from a single URL using the standalone scraper engine |
-| `vscreen_synthesis_scrape_batch` | Scrape multiple URLs in parallel using ephemeral CDP tabs. Returns structured JSON keyed by URL |
-| `vscreen_synthesis_scrape_and_create` | One-shot: scrape multiple URLs in parallel AND create a synthesis page. Uses progressive rendering via SSE |
-| `vscreen_synthesis_save` | Persist a page to disk (survives server restarts) |
+| `vscreen_synthesis_manage` | Manage synthesis pages — actions: `create`, `update`, `delete`, `list`, `push`, `save`, `navigate` |
+| `vscreen_synthesis_scrape` | Scrape structured article data — modes: `single` (one URL) or `batch` (parallel multi-URL via ephemeral CDP tabs) |
+| `vscreen_synthesis_scrape_and_create` | One-shot: scrape multiple URLs in parallel AND create a synthesis page with progressive rendering via SSE |
 
 </details>
 
+> **Design note:** 0.2.0 consolidated 73 granular tools into 47 multi-mode tools. Operations like navigate/back/forward/reload are now a single `vscreen_navigate` with an `action` parameter. Element search by selector/text/input is a single `vscreen_find`. Cookie/localStorage/sessionStorage access is a single `vscreen_storage`. This reduces MCP round-trips and simplifies agent workflows.
+
 ### Recommended AI workflow
 
+**Quick path (workflow tools):**
+
+1. **Browse** — `vscreen_browse(url=...)` navigates, waits, screenshots, and returns page info in one call
+2. **Interact** — `vscreen_interact(action="click", target="Sign In")` acts on elements by text or selector
+3. **Observe** — `vscreen_observe(include_elements=true)` screenshots with element inventory
+4. **Extract** — `vscreen_extract(mode="articles")` pulls structured data
+5. **Repeat**
+
+**Granular path (precise control):**
+
 1. **Navigate** — `vscreen_navigate` to the target URL
-2. **Wait** — `vscreen_wait_for_idle` for the page to load
-3. **Observe** — `vscreen_screenshot(full_page=true)` to see the entire page in one call
-4. **Discover** — `vscreen_find_elements` or `vscreen_find_by_text` to locate targets
+2. **Wait** — `vscreen_wait(condition="idle")` for the page to load
+3. **Screenshot** — `vscreen_screenshot(full_page=true)` to see the entire page
+4. **Discover** — `vscreen_find(by="text", text="Sign In")` to locate targets
 5. **Act** — `vscreen_click`, `vscreen_type`, `vscreen_key_press`
 6. **Verify** — `vscreen_screenshot` to confirm the result
 7. **Repeat**
 
 **Critical rules:**
 - Always use `vscreen_screenshot(full_page=true)` to capture entire pages. Never scroll+screenshot in loops.
-- Prefer `vscreen_wait_for_text` / `vscreen_wait_for_selector` over fixed `vscreen_wait` delays.
-- For multi-site scraping, use `vscreen_synthesis_scrape_batch` or `vscreen_synthesis_scrape_and_create`.
+- Prefer `vscreen_wait(condition="text")` / `vscreen_wait(condition="selector")` over fixed duration waits.
+- For multi-site scraping, use `vscreen_synthesis_scrape(mode="batch")` or `vscreen_synthesis_scrape_and_create`.
 
-Use `vscreen_session_log` to review actions taken and `vscreen_history_get` to revisit earlier screenshots.
+Use `vscreen_session_log` to review actions taken and `vscreen_history(action="get")` to revisit earlier screenshots.
 
 ### Full-page screenshots and coordinate translation
 
@@ -575,17 +555,18 @@ This single call:
 
 ### Component library
 
-24 components across 7 categories, all built with Svelte 5 runes and Tailwind CSS 4.
+31 components across 8 categories, all built with Svelte 5 runes and Tailwind CSS 4.
 
 | Category | Components |
 |----------|------------|
-| **Content** | `card-grid`, `content-list`, `image-gallery`, `hero`, `live-feed`, `stats-row` |
+| **Content** | `card-grid`, `content-list`, `image-gallery`, `hero`, `article-card`, `source-badge`, `stats-row` |
 | **Data Visualization** | `data-table` (sortable, paginated), `bar-chart`, `line-chart`, `pie-chart`, `progress-bar` |
 | **Navigation** | `sidebar`, `breadcrumbs`, `pagination` |
 | **Interactive** | `accordion`, `modal`, `filter-bar`, `timeline` |
 | **Content Blocks** | `markdown-block`, `code-block`, `quote-block`, `key-value-list` |
 | **Composite** | `comparison-table`, `notification-banner` |
-| **Layout** | `tabs`, `split` (via page layout property) |
+| **Realtime** | `live-feed`, `status-indicator` |
+| **Layout** | `page-shell`, `component-renderer`, `tab-layout`, `split-layout` |
 
 All chart components use raw SVG — no Chart.js or D3 dependencies. The `Section.meta` field passes component-specific configuration (e.g., column definitions for tables, series data for charts).
 
@@ -610,18 +591,13 @@ Intuitive shorthand names are automatically resolved to canonical component type
 
 ### Synthesis MCP tools
 
+In 0.2.0, synthesis tools were consolidated into 3 multi-action tools:
+
 | Tool | Purpose |
 |------|---------|
-| `vscreen_synthesis_scrape` | Navigate to a URL and extract articles using a standalone JS scraper engine with JSON-LD extraction, DOM heuristics, ad filtering, content quality scoring, and image authority locking. Returns clean JSON. |
-| `vscreen_synthesis_scrape_batch` | Scrape multiple URLs in parallel using ephemeral CDP tabs. Each URL gets its own isolated tab. Returns structured JSON keyed by URL with article data, quality metrics, and a summary. |
-| `vscreen_synthesis_scrape_and_create` | One-shot: scrape + create page + navigate. Uses progressive rendering — page builds live as each source completes. Auto-selects component types based on article count (1-3: `hero`, 4-12: `card-grid`, 13+: `content-list`). |
-| `vscreen_synthesis_create` | Create a page with title, theme, layout, and sections. Supports `grid`, `list`, `tabs`, and `split` layouts. Optional `navigate_instance` param creates and navigates in one call. |
-| `vscreen_synthesis_push` | Append data to a section — triggers real-time SSE update to all connected browsers. |
-| `vscreen_synthesis_update` | Change title, theme, layout, or replace sections. |
-| `vscreen_synthesis_navigate` | Navigate a browser instance to a synthesis page. Auto-bypasses SSL cert interstitials. |
-| `vscreen_synthesis_save` | Persist page JSON to `tools/synthesis/.data/` for survival across restarts. |
-| `vscreen_synthesis_list` | List all active pages with their metadata. |
-| `vscreen_synthesis_delete` | Remove a page. |
+| `vscreen_synthesis_manage` | All page lifecycle operations via `action` param: `create` (new page with title/theme/layout/sections), `update` (modify existing), `delete`, `list`, `push` (append data to section, triggers SSE live update), `save` (persist to disk), `navigate` (open in browser, auto-bypasses SSL). |
+| `vscreen_synthesis_scrape` | Extract structured article data — `single` mode for one URL, `batch` mode for parallel multi-URL scraping via ephemeral CDP tabs. Uses JSON-LD, DOM heuristics, ad filtering, content quality scoring, and image authority locking. |
+| `vscreen_synthesis_scrape_and_create` | One-shot: scrape multiple URLs in parallel AND create a page. Progressive rendering — creates page with empty sections first, pushes articles as each source completes (page live-updates via SSE). Auto-selects component types based on article count (1-3: `hero`, 4-12: `card-grid`, 13+: `content-list`). |
 
 ### Scraper architecture
 
@@ -929,26 +905,26 @@ cargo build --release -p vscreen --features "pulse-audio,tls"
 
 ## Code Quality
 
-~35,000 lines of Rust + ~5,000 lines of TypeScript/Svelte with strict quality enforcement.
+~32,000 lines of Rust + ~5,000 lines of TypeScript/Svelte with strict quality enforcement.
 
 | Metric | Value |
 |--------|-------|
-| Rust tests (unit + async + integration) | 626+ |
+| Rust tests (unit + async + integration) | 639+ |
 | Synthesis component tests (Vitest) | 306 |
 | Synthesis test files | 35 |
 | Fuzz targets | 3 |
 | Criterion benchmarks | 5 |
-| Rust source files | 70 `.rs` files across 8 crates |
-| Synthesis components | 24 Svelte 5 components |
-| MCP tools | 73 |
+| Rust source files | 80 `.rs` files across 8 crates |
+| Synthesis components | 31 Svelte 5 components |
+| MCP tools | 47 (consolidated from 73 granular tools) |
 
 ### Test coverage highlights
 
 - **MCP param deserialization** — every tool parameter struct has positive and negative deserialization tests
 - **Component selection** — boundary condition tests for the auto-selector (0, 3, 4, 12, 13, 1000 articles)
 - **Process lifecycle** — `is_process_alive` correctness, `stop_child_gracefully` and `stop_process_tree` with real child processes and process group verification
-- **Integration tests** — all 73 tools verified via MCP protocol, including no-supervisor and invalid-params error paths
-- **Synthesis components** — all 24 component types tested with valid and malformed data via Vitest
+- **Integration tests** — all 47 tools verified via MCP protocol, including no-supervisor and invalid-params error paths
+- **Synthesis components** — all 31 component types tested with valid and malformed data via Vitest
 
 ### Compiler and lint enforcement
 
@@ -988,13 +964,29 @@ vscreen/
 │   ├── vscreen-audio/        # PulseAudio capture → Opus encode
 │   ├── vscreen-transport/    # WebRTC sessions, RTP sender
 │   ├── vscreen-rtsp/         # RTSP audio server, session management
-│   └── vscreen-server/       # HTTP/WS API, MCP server (73 tools), supervisor
-│       └── src/mcp/
-│           ├── mod.rs         # VScreenMcpServer, tool router, shared helpers
-│           ├── params.rs      # All parameter structs (Deserialize, Serialize, JsonSchema)
-│           ├── advisor.rs     # Smart hints for repeated-wait and anti-pattern detection
-│           ├── scraper.js     # Standalone scraper engine (JS, injected into browser)
-│           └── tests.rs       # Unit tests (pick_section_component, param deser, disabled-state)
+│   └── vscreen-server/       # HTTP/WS API, MCP server (47 tools), supervisor
+│       └── src/
+│           ├── mcp/
+│           │   ├── mod.rs             # VScreenMcpServer, tool router, core tools (list, lock, audio, plan, help)
+│           │   ├── navigation.rs      # vscreen_navigate, vscreen_wait
+│           │   ├── interaction.rs     # click, type, fill, key, scroll, drag, hover, CAPTCHA solver
+│           │   ├── observation.rs     # screenshot, find, page info, extract text, accessibility, describe
+│           │   ├── session.rs         # history, session log/summary, console, storage
+│           │   ├── workflow.rs        # vscreen_browse, vscreen_observe, vscreen_extract
+│           │   ├── workflow_interact.rs # vscreen_interact, vscreen_synthesize, vscreen_solve_challenge
+│           │   ├── synthesis.rs       # vscreen_synthesis_manage, scrape, scrape_and_create
+│           │   ├── captcha.rs         # reCAPTCHA helpers: detection, iframe discovery, grid geometry
+│           │   ├── advisor.rs         # Anti-pattern detection and tool selection hints
+│           │   ├── docs.rs            # Built-in documentation, task routing, topic help
+│           │   ├── params.rs          # All parameter structs (Deserialize, Serialize, JsonSchema)
+│           │   ├── scraper.js         # Standalone article scraper engine (injected into browser)
+│           │   ├── scraper_table.js   # Table extraction
+│           │   ├── scraper_kv.js      # Key-value pair extraction
+│           │   ├── scraper_stats.js   # Numeric stat extraction
+│           │   └── tests.rs           # Unit tests
+│           ├── screenshot_watcher.rs  # Perceptual hash grid change detection
+│           ├── supervisor.rs          # Browser lifecycle, CDP management, stealth injection
+│           └── vision.rs              # Ollama vision LLM client, streaming inference
 ├── tools/
 │   ├── synthesis/            # Synthesis Bubble (SvelteKit 5, 24 components, HTTPS)
 │   │   ├── src/lib/components/   # content/, viz/, nav/, interactive/, blocks/, composite/, layout/
