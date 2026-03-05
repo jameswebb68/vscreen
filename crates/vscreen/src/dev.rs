@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::Duration;
@@ -15,6 +16,7 @@ pub(crate) struct DevEnvironment {
     cdp_endpoint: Option<String>,
     sink_name: String,
     pid_file: Option<PathBuf>,
+    ignore_cert_errors: bool,
 }
 
 impl std::fmt::Debug for DevEnvironment {
@@ -38,7 +40,7 @@ impl DevEnvironment {
     ///
     /// # Errors
     /// Returns an error string if any component fails to start or conflicts are detected.
-    pub(crate) async fn start(display: u32, cdp_port: u16) -> Result<Self, String> {
+    pub(crate) async fn start(display: u32, cdp_port: u16, ignore_cert_errors: bool) -> Result<Self, String> {
         // --- Conflict detection ---
         // PID file check must come first: if the previous vscreen is dead but
         // its children (Xvfb, Chromium) are still alive, this cleans them up
@@ -58,6 +60,7 @@ impl DevEnvironment {
             cdp_endpoint: None,
             sink_name,
             pid_file: None,
+            ignore_cert_errors,
         };
 
         env.start_xvfb()?;
@@ -90,6 +93,7 @@ impl DevEnvironment {
             .args([&display_arg, "-screen", screen_arg, resolution, "-ac", "-nolisten", "tcp"])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
+            .process_group(0)
             .spawn()
             .map_err(|e| format!("failed to start Xvfb: {e}"))?;
 
@@ -147,29 +151,36 @@ impl DevEnvironment {
             cmd.env("PULSE_SINK", &self.sink_name);
         }
         let user_data_dir = format!("/tmp/vscreen-chrome-profile-{}", self.display);
-        cmd.args([
-            &format!("--remote-debugging-port={cdp_port}"),
-            &format!("--user-data-dir={user_data_dir}"),
-            "--no-sandbox",
-            "--disable-gpu",
-            "--use-gl=angle",
-            "--use-angle=swiftshader",
-            "--window-size=1920,1080",
-            "--window-position=0,0",
-            "--no-first-run",
-            "--disable-default-apps",
-            "--disable-extensions",
-            "--disable-translate",
-            "--disable-sync",
-            "--autoplay-policy=no-user-gesture-required",
-            "--force-color-profile=srgb",
-            "--disable-background-timer-throttling",
-            "--disable-renderer-backgrounding",
-            "--disable-backgrounding-occluded-windows",
-            "about:blank",
-        ]);
+        let mut args = vec![
+            format!("--remote-debugging-port={cdp_port}"),
+            format!("--user-data-dir={user_data_dir}"),
+            "--no-sandbox".into(),
+            "--disable-gpu".into(),
+            "--use-gl=angle".into(),
+            "--use-angle=swiftshader".into(),
+            "--window-size=1920,1080".into(),
+            "--window-position=0,0".into(),
+            "--no-first-run".into(),
+            "--disable-default-apps".into(),
+            "--disable-extensions".into(),
+            "--disable-translate".into(),
+            "--disable-sync".into(),
+            "--autoplay-policy=no-user-gesture-required".into(),
+            "--force-color-profile=srgb".into(),
+            "--disable-background-timer-throttling".into(),
+            "--disable-renderer-backgrounding".into(),
+            "--disable-backgrounding-occluded-windows".into(),
+            "--disable-blink-features=AutomationControlled".into(),
+            "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".into(),
+        ];
+        if self.ignore_cert_errors {
+            args.push("--ignore-certificate-errors".into());
+        }
+        args.push("about:blank".into());
+        cmd.args(&args);
         cmd.stdout(std::process::Stdio::null());
         cmd.stderr(std::process::Stdio::null());
+        cmd.process_group(0);
 
         let child = cmd.spawn().map_err(|e| format!("failed to launch {browser}: {e}"))?;
         info!(pid = child.id(), browser = %browser, "Chromium launched");
@@ -257,11 +268,13 @@ impl Drop for DevEnvironment {
     }
 }
 
-/// Send SIGTERM first, wait up to `timeout`, then SIGKILL if still running.
+/// Send SIGTERM to the process group first, wait up to `timeout`, then SIGKILL.
+/// The child must have been spawned with `.process_group(0)`.
 fn stop_child_gracefully(child: &mut Child, timeout: std::time::Duration) {
     let pid = child.id();
+    let neg_pgid = format!("-{pid}");
     let _ = Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
+        .args(["-TERM", "--", &neg_pgid])
         .output();
 
     let start = std::time::Instant::now();
@@ -272,6 +285,7 @@ fn stop_child_gracefully(child: &mut Child, timeout: std::time::Duration) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
             _ => {
+                let _ = Command::new("kill").args(["-9", "--", &neg_pgid]).output();
                 let _ = child.kill();
                 let _ = child.wait();
                 break;
@@ -280,15 +294,15 @@ fn stop_child_gracefully(child: &mut Child, timeout: std::time::Duration) {
     }
 }
 
-/// Kill a process and all its descendants (the entire child tree).
-/// First sends SIGTERM, then SIGKILL to all descendants via `pkill -P`.
+/// Kill a process and all its descendants via process group.
+/// The child must have been spawned with `.process_group(0)` so its PID is the PGID.
+/// Sends SIGTERM to the entire group, waits up to `timeout`, then SIGKILL.
 fn stop_process_tree(child: &mut Child, timeout: std::time::Duration) {
     let pid = child.id();
-    let pid_str = pid.to_string();
+    let neg_pgid = format!("-{pid}");
 
-    // SIGTERM the main process and its immediate children
-    let _ = Command::new("kill").args(["-TERM", &pid_str]).output();
-    let _ = Command::new("pkill").args(["-TERM", "-P", &pid_str]).output();
+    // SIGTERM the entire process group (negative PID = group)
+    let _ = Command::new("kill").args(["-TERM", "--", &neg_pgid]).output();
 
     let start = std::time::Instant::now();
     loop {
@@ -298,8 +312,8 @@ fn stop_process_tree(child: &mut Child, timeout: std::time::Duration) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
             _ => {
-                // Forcefully kill the entire subtree
-                let _ = Command::new("pkill").args(["-9", "-P", &pid_str]).output();
+                // SIGKILL the entire process group
+                let _ = Command::new("kill").args(["-9", "--", &neg_pgid]).output();
                 let _ = child.kill();
                 let _ = child.wait();
                 break;
@@ -452,15 +466,37 @@ fn check_pid_file(disp: u32) -> Result<(), String> {
     Ok(())
 }
 
-/// Check if a process with the given PID is alive via `kill -0`.
+/// Check if a process with the given PID is alive and not a zombie.
+/// `kill -0` returns success for zombie processes, so we also check
+/// `/proc/PID/status` for the "Z (zombie)" state.
 fn is_process_alive(pid: i32) -> bool {
-    Command::new("kill")
+    let signal_ok = Command::new("kill")
         .args(["-0", &pid.to_string()])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .map(|s| s.success())
-        .unwrap_or(false)
+        .unwrap_or(false);
+
+    if !signal_ok {
+        return false;
+    }
+
+    // Reject zombies: check /proc/PID/status for "State: Z"
+    // If the file is unreadable or lacks a State line, the process is likely gone.
+    let status_path = format!("/proc/{pid}/status");
+    let contents = match fs::read_to_string(&status_path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    for line in contents.lines() {
+        if line.starts_with("State:") {
+            return !line.contains("Z (zombie)") && !line.contains("Z (");
+        }
+    }
+
+    false
 }
 
 /// Query the CDP /json endpoint to get the WebSocket debugger URL.
@@ -564,4 +600,84 @@ fn try_extract_body(buf: &[u8]) -> Option<String> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // is_process_alive
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn is_process_alive_current_process() {
+        let pid = std::process::id() as i32;
+        assert!(is_process_alive(pid), "current process should be alive");
+    }
+
+    #[test]
+    fn is_process_alive_nonexistent_pid() {
+        assert!(!is_process_alive(999_999_999), "nonexistent PID should not be alive");
+    }
+
+    #[test]
+    fn is_process_alive_zero() {
+        assert!(!is_process_alive(0), "PID 0 should not report as alive");
+    }
+
+    #[test]
+    fn is_process_alive_negative() {
+        assert!(!is_process_alive(-1), "negative PID should not report as alive");
+    }
+
+    // -----------------------------------------------------------------------
+    // stop_child_gracefully
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn stop_child_gracefully_kills_process() {
+        let mut child = Command::new("sleep")
+            .arg("60")
+            .process_group(0)
+            .spawn()
+            .expect("spawn sleep");
+        assert!(child.try_wait().unwrap().is_none(), "child should be running");
+
+        stop_child_gracefully(&mut child, Duration::from_secs(3));
+
+        let status = child.try_wait().expect("try_wait after stop");
+        assert!(status.is_some(), "child should have exited");
+    }
+
+    // -----------------------------------------------------------------------
+    // stop_process_tree
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn stop_process_tree_kills_group() {
+        let mut child = Command::new("bash")
+            .args(["-c", "sleep 60 & sleep 60 & wait"])
+            .process_group(0)
+            .spawn()
+            .expect("spawn bash with children");
+
+        let pid = child.id();
+        std::thread::sleep(Duration::from_millis(200));
+
+        stop_process_tree(&mut child, Duration::from_secs(3));
+
+        let status = child.try_wait().expect("try_wait after stop_process_tree");
+        assert!(status.is_some(), "parent should have exited");
+
+        // Verify the process group is dead (kill -0 -pgid should fail)
+        let probe = Command::new("kill")
+            .args(["-0", "--", &format!("-{pid}")])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if let Ok(s) = probe {
+            assert!(!s.success(), "process group should be dead after stop_process_tree");
+        }
+    }
 }

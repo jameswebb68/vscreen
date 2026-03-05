@@ -31,4 +31,3 @@ fuzz/artifacts/
 
 # Build artifacts
 *.log
-/dist/

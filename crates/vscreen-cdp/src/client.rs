@@ -587,6 +587,45 @@ impl CdpClient {
             .unwrap_or(serde_json::Value::Null))
     }
 
+    /// Like [`evaluate_js`] but with `awaitPromise: true`, so the expression
+    /// may return a `Promise` and the CDP call will resolve it before
+    /// returning the value.
+    ///
+    /// # Errors
+    /// Returns `CdpError` on connection loss, timeout, JS exception, or CDP error.
+    pub async fn evaluate_js_async(
+        &self,
+        expression: &str,
+    ) -> Result<serde_json::Value, CdpError> {
+        let params = serde_json::json!({
+            "expression": expression,
+            "returnByValue": true,
+            "awaitPromise": true,
+        });
+
+        let response = self
+            .send_command_and_wait("Runtime.evaluate", Some(params))
+            .await?;
+
+        let result_obj = response
+            .result
+            .ok_or_else(|| CdpError::Protocol("missing evaluation result".into()))?;
+
+        if let Some(exception) = result_obj.get("exceptionDetails") {
+            let text = exception
+                .get("text")
+                .and_then(|t| t.as_str())
+                .unwrap_or("unknown JS error");
+            return Err(CdpError::Protocol(format!("JS exception: {text}")));
+        }
+
+        Ok(result_obj
+            .get("result")
+            .and_then(|r| r.get("value"))
+            .cloned()
+            .unwrap_or(serde_json::Value::Null))
+    }
+
     /// Capture a screenshot with an optional clip rectangle.
     ///
     /// # Errors
@@ -783,6 +822,56 @@ impl CdpClient {
     ) -> Result<(), CdpError> {
         let req = CdpRequest::new(method, params);
         self.send_request(req).await
+    }
+
+    /// Create a new browser tab (CDP target) and return its `targetId`.
+    ///
+    /// The new tab navigates to `url` (use `"about:blank"` for an empty tab).
+    ///
+    /// # Errors
+    /// Returns `CdpError` if the CDP command fails.
+    pub async fn create_target(&self, url: &str) -> Result<String, CdpError> {
+        let params = serde_json::json!({ "url": url });
+        let response = self
+            .send_command_and_wait("Target.createTarget", Some(params))
+            .await?;
+        let target_id = response
+            .result
+            .as_ref()
+            .and_then(|r| r.get("targetId"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| CdpError::Protocol("missing targetId in response".into()))?;
+        Ok(target_id.to_string())
+    }
+
+    /// Close a browser tab (CDP target) by its `targetId`.
+    ///
+    /// # Errors
+    /// Returns `CdpError` if the CDP command fails.
+    pub async fn close_target(&self, target_id: &str) -> Result<(), CdpError> {
+        let params = serde_json::json!({ "targetId": target_id });
+        self.send_command_and_wait("Target.closeTarget", Some(params))
+            .await?;
+        Ok(())
+    }
+
+    /// Derive a WebSocket URL for a different target on the same Chrome instance.
+    ///
+    /// Given the existing endpoint `ws://host:port/devtools/page/OLD_ID`,
+    /// returns `ws://host:port/devtools/page/<target_id>`.
+    #[must_use]
+    pub fn endpoint_for_target(&self, target_id: &str) -> String {
+        if let Some(base) = self.endpoint.rfind("/devtools/page/") {
+            format!("{}/devtools/page/{target_id}", &self.endpoint[..base])
+        } else {
+            format!("{}/{target_id}", self.endpoint)
+        }
+    }
+
+    /// Get the endpoint URL this client is connected to.
+    #[must_use]
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
     }
 
     /// Send a raw CDP request.

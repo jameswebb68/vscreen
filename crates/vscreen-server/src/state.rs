@@ -31,6 +31,8 @@ pub struct AppState {
     pub rtsp_port: u16,
     /// Vision LLM client for screenshot-based verification (None if not configured).
     pub vision_client: Option<Arc<VisionClient>>,
+    /// Synthesis dev server URL (set when --synthesis is enabled).
+    pub synthesis_url: Option<String>,
 }
 
 impl AppState {
@@ -46,6 +48,7 @@ impl AppState {
             rtsp_session_manager: None,
             rtsp_port: 0,
             vision_client: None,
+            synthesis_url: None,
         }
     }
 

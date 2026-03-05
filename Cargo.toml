@@ -83,6 +83,7 @@ clap = { version = "4", features = ["derive", "env"] }
 
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
 dashmap = "6"
 parking_lot = "0.12"

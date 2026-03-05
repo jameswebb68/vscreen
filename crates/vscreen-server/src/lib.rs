@@ -5,6 +5,7 @@ pub mod memory;
 pub mod middleware;
 pub mod metrics;
 pub mod router;
+pub mod screenshot_watcher;
 pub mod state;
 pub mod supervisor;
 pub mod vision;

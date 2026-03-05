@@ -1,5 +1,6 @@
 mod dev;
 mod mcp_proxy;
+mod synthesis;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -89,6 +90,18 @@ struct Cli {
     /// Example: VSCREEN_VISION_MODEL=qwen3-vl:8b
     #[arg(long, env = "VSCREEN_VISION_MODEL", default_value = "qwen3-vl:8b")]
     vision_model: String,
+
+    /// Start the Synthesis frontend dev server (SvelteKit) for AI-driven page building.
+    #[arg(long)]
+    synthesis: bool,
+
+    /// Port for the Synthesis dev server (default: 5174)
+    #[arg(long, default_value = "5174")]
+    synthesis_port: u16,
+
+    /// Host for the Synthesis dev server (default: 0.0.0.0)
+    #[arg(long, default_value = "0.0.0.0")]
+    synthesis_host: String,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -168,6 +181,9 @@ fn main() -> anyhow::Result<()> {
         video_codec,
         cli.vision_url,
         cli.vision_model,
+        cli.synthesis,
+        cli.synthesis_host,
+        cli.synthesis_port,
     ))
 }
 
@@ -185,6 +201,9 @@ async fn run(
     video_codec: vscreen_core::VideoCodec,
     vision_url: Option<String>,
     vision_model: String,
+    synthesis_enabled: bool,
+    synthesis_host: String,
+    synthesis_port: u16,
 ) -> anyhow::Result<()> {
     let cancel = CancellationToken::new();
     let mut state = AppState::new(config.clone(), cancel.clone());
@@ -207,7 +226,7 @@ async fn run(
     if dev_mode {
         info!("starting dev environment...");
 
-        let env = dev::DevEnvironment::start(dev_display, dev_cdp_port)
+        let env = dev::DevEnvironment::start(dev_display, dev_cdp_port, synthesis_enabled)
             .await
             .map_err(|e| anyhow::anyhow!("dev environment start failed: {e}"))?;
 
@@ -264,6 +283,23 @@ async fn run(
         }
 
         _dev_env = Some(env);
+    }
+
+    let mut _synthesis_env = None;
+
+    if synthesis_enabled {
+        info!("starting synthesis environment...");
+        match synthesis::SynthesisEnvironment::start(&synthesis_host, synthesis_port).await {
+            Ok(env) => {
+                let url = env.base_url().to_owned();
+                state.synthesis_url = Some(url.clone());
+                info!(url = %url, "synthesis environment ready");
+                _synthesis_env = Some(env);
+            }
+            Err(e) => {
+                error!(error = %e, "failed to start synthesis environment");
+            }
+        }
     }
 
     vscreen_server::metrics::init_metrics();
@@ -375,9 +411,10 @@ async fn run(
     }
     supervisors_handle.clear();
 
+    drop(_synthesis_env);
     drop(_dev_env);
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     info!("shutdown complete");
     Ok(())
@@ -398,12 +435,23 @@ async fn shutdown_signal() {
             .await;
     };
 
+    #[cfg(unix)]
+    let hangup = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
+            .expect("failed to install SIGHUP handler")
+            .recv()
+            .await;
+    };
+
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
+    #[cfg(not(unix))]
+    let hangup = std::future::pending::<()>();
 
     tokio::select! {
         () = ctrl_c => {},
         () = terminate => {},
+        () = hangup => {},
     }
 }
 

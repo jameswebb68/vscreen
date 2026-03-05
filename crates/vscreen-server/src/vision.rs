@@ -214,7 +214,7 @@ impl VisionClient {
             let b64 = base64::engine::general_purpose::STANDARD.encode(image_png);
 
             let full_text = match format {
-                ApiFormat::Ollama => self.call_ollama_fast(&b64, prompt).await?,
+                ApiFormat::Ollama => self.call_ollama_fast(&b64, prompt, timeout).await?,
                 ApiFormat::OpenAi => self.call_openai(&b64, prompt).await?,
             };
 
@@ -383,7 +383,7 @@ impl VisionClient {
     /// Ollama call with early JSON extraction. Stops streaming as soon as a
     /// complete JSON object is found in the content field.
     /// Like `call_ollama` but with early-exit for latency-sensitive use cases.
-    async fn call_ollama_fast(&self, image_b64: &str, prompt: &str) -> Result<String, VisionError> {
+    async fn call_ollama_fast(&self, image_b64: &str, prompt: &str, caller_timeout: Duration) -> Result<String, VisionError> {
         let url = format!("{}/api/chat", self.config.url.trim_end_matches('/'));
 
         // No num_predict limit. qwen3-vl thinking tokens + content tokens
@@ -477,10 +477,12 @@ impl VisionClient {
                     }
 
                     // Bail if the model is stuck thinking and hasn't produced
-                    // any content after 25 seconds of streaming
+                    // any content after 60% of the caller's timeout
+                    let thinking_abort_ms = (caller_timeout.as_millis() as u64 * 75) / 100;
+                    let thinking_abort = Duration::from_millis(thinking_abort_ms.max(15_000));
                     if full_text.is_empty()
                         && thinking_tokens > 500
-                        && stream_start.elapsed() > Duration::from_secs(25)
+                        && stream_start.elapsed() > thinking_abort
                     {
                         warn!(
                             thinking_tokens,
@@ -841,6 +843,17 @@ Check each tile for the target. Return JSON:
 {\"target\": \"<object>\", \"grid_size\": 9, \"tiles\": [<indices>], \"confidence\": 0.8, \"type\": \"dynamic\"}
 
 For 4x4 grids, select ALL squares containing any part of the target.";
+
+    /// Prompt for reading the CAPTCHA header to extract the target object and challenge type.
+    pub const CAPTCHA_HEADER: &str = "\
+This is the header of a reCAPTCHA challenge. It contains blue/dark background text \
+that says something like 'Select all images with [target]' or 'Select all squares with [target]'.
+
+Read the text carefully. Return ONLY JSON:
+{\"target\": \"<the target object>\", \"type\": \"dynamic\"} for 3x3 grids ('select all images with')
+{\"target\": \"<the target object>\", \"type\": \"select_all\"} for 4x4 grids ('select all squares with')
+
+Examples: {\"target\": \"cars\", \"type\": \"dynamic\"}, {\"target\": \"traffic lights\", \"type\": \"select_all\"}";
 
     /// Prompt for checking whether a single cropped tile contains a specific target object.
     pub const CAPTCHA_TILE_SINGLE: &str = "\

@@ -17,6 +17,68 @@ use vscreen_video::pipeline::VideoPipeline;
 
 use crate::memory::{ActionLog, ConsoleBuffer, ScreenshotHistory};
 
+/// Stealth script injected via Page.addScriptToEvaluateOnNewDocument to reduce
+/// bot detection (e.g. reCAPTCHA). Runs before any page JavaScript on every navigation.
+const STEALTH_SCRIPT: &str = r#"
+(function() {
+    // 1. Override navigator.webdriver to undefined
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+        configurable: true
+    });
+
+    // 2. Add chrome runtime object (missing in headless, detected by reCAPTCHA)
+    if (!window.chrome) {
+        window.chrome = {
+            runtime: {
+                onMessage: { addListener: function() {}, removeListener: function() {} },
+                sendMessage: function() {},
+                connect: function() { return { onMessage: { addListener: function() {} } }; }
+            },
+            loadTimes: function() { return {}; },
+            csi: function() { return {}; }
+        };
+    }
+
+    // 3. Set realistic navigator.plugins (headless has empty plugins array)
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+            return [
+                { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+            ];
+        },
+        configurable: true
+    });
+
+    // 4. Set realistic navigator.languages
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+        configurable: true
+    });
+
+    // 5. Override permissions query (headless returns "denied" for notifications)
+    if (navigator.permissions) {
+        const originalQuery = navigator.permissions.query;
+        navigator.permissions.query = (parameters) => {
+            if (parameters.name === 'notifications') {
+                return Promise.resolve({ state: 'default', onchange: null });
+            }
+            return originalQuery.call(navigator.permissions, parameters);
+        };
+    }
+
+    // 6. Fix webgl renderer (some bots check for "SwiftShader" in renderer string)
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+        if (parameter === 37445) return 'Intel Inc.';        // UNMASKED_VENDOR_WEBGL
+        if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
+        return getParameter.call(this, parameter);
+    };
+})();
+"#;
+
 /// Command sent to the dedicated encode thread (C1).
 struct EncodeCommand {
     data: bytes::Bytes,
@@ -54,6 +116,56 @@ impl CursorPosition {
 
     fn get(&self) -> (i32, i32) {
         Self::unpack(self.packed.load(std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
+/// A lightweight, temporary browser tab for isolated operations like parallel scraping.
+///
+/// Created via [`InstanceSupervisor::create_ephemeral_tab`] and must be closed
+/// via [`InstanceSupervisor::close_ephemeral_tab`] when done.
+pub struct EphemeralTab {
+    pub target_id: String,
+    pub client: Arc<tokio::sync::Mutex<CdpClient>>,
+    cancel: CancellationToken,
+}
+
+impl std::fmt::Debug for EphemeralTab {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EphemeralTab")
+            .field("target_id", &self.target_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl EphemeralTab {
+    /// Evaluate async JavaScript in this tab (expression may return a Promise).
+    pub async fn evaluate_js_async(
+        &self,
+        expression: &str,
+    ) -> Result<serde_json::Value, VScreenError> {
+        let client = self.client.lock().await;
+        client
+            .evaluate_js_async(expression)
+            .await
+            .map_err(VScreenError::Cdp)
+    }
+
+    /// Evaluate synchronous JavaScript in this tab.
+    pub async fn evaluate_js(
+        &self,
+        expression: &str,
+    ) -> Result<serde_json::Value, VScreenError> {
+        let client = self.client.lock().await;
+        client
+            .evaluate_js(expression)
+            .await
+            .map_err(VScreenError::Cdp)
+    }
+
+    /// Navigate this tab to a URL.
+    pub async fn navigate(&self, url: &str) -> Result<(), VScreenError> {
+        let client = self.client.lock().await;
+        client.navigate(url).await.map_err(VScreenError::Cdp)
     }
 }
 
@@ -111,6 +223,17 @@ impl InstanceSupervisor {
         );
 
         cdp.connect().await.map_err(VScreenError::Cdp)?;
+
+        // Inject stealth scripts before any page loads (reduces bot detection)
+        cdp.send_command_and_wait("Page.enable", None)
+            .await
+            .map_err(VScreenError::Cdp)?;
+        cdp.send_command_and_wait(
+            "Page.addScriptToEvaluateOnNewDocument",
+            Some(serde_json::json!({ "source": STEALTH_SCRIPT })),
+        )
+        .await
+        .map_err(VScreenError::Cdp)?;
 
         let screencast_params = StartScreencastParams {
             format: "jpeg".into(),
@@ -772,6 +895,21 @@ impl InstanceSupervisor {
             .map_err(VScreenError::Cdp)
     }
 
+    /// Execute async JavaScript (expression may return a Promise).
+    ///
+    /// # Errors
+    /// Returns `VScreenError` if the JS evaluation fails.
+    pub async fn evaluate_js_async(
+        &self,
+        expression: &str,
+    ) -> Result<serde_json::Value, VScreenError> {
+        let client = self.cdp_client.lock().await;
+        client
+            .evaluate_js_async(expression)
+            .await
+            .map_err(VScreenError::Cdp)
+    }
+
     /// Execute JavaScript in a specific frame's context.
     ///
     /// # Errors
@@ -942,6 +1080,56 @@ impl InstanceSupervisor {
             }
         }
         Ok(())
+    }
+
+    /// Create an ephemeral browser tab for isolated operations (e.g. parallel scraping).
+    ///
+    /// Returns an `EphemeralTab` with its own CDP connection. The tab is separate
+    /// from the main tab and will not affect its state. The caller must call
+    /// `close_ephemeral_tab` when done.
+    ///
+    /// # Errors
+    /// Returns `VScreenError` if tab creation or CDP connection fails.
+    pub async fn create_ephemeral_tab(
+        &self,
+        url: &str,
+    ) -> Result<EphemeralTab, VScreenError> {
+        let (target_id, ws_url) = {
+            let client = self.cdp_client.lock().await;
+            let tid = client.create_target(url).await.map_err(VScreenError::Cdp)?;
+            let ws = client.endpoint_for_target(&tid);
+            (tid, ws)
+        };
+
+        let cancel = CancellationToken::new();
+        let mut tab_client = CdpClient::new(
+            ws_url,
+            cancel.clone(),
+            RetryConfig {
+                max_attempts: 3,
+                ..RetryConfig::default()
+            },
+        );
+        tab_client.connect().await.map_err(VScreenError::Cdp)?;
+
+        Ok(EphemeralTab {
+            target_id,
+            client: Arc::new(tokio::sync::Mutex::new(tab_client)),
+            cancel,
+        })
+    }
+
+    /// Close an ephemeral tab, disconnecting its CDP client and removing the target.
+    ///
+    /// # Errors
+    /// Returns `VScreenError` if the target cannot be closed.
+    pub async fn close_ephemeral_tab(&self, tab: &EphemeralTab) -> Result<(), VScreenError> {
+        tab.cancel.cancel();
+        let client = self.cdp_client.lock().await;
+        client
+            .close_target(&tab.target_id)
+            .await
+            .map_err(VScreenError::Cdp)
     }
 
     /// Get the current page URL via JS evaluation, returning an empty string on failure.

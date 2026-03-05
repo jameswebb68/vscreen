@@ -143,11 +143,9 @@ async fn test_list_tools_returns_all() {
     let expected = [
         "vscreen_list_instances",
         "vscreen_screenshot",
-        "vscreen_screenshot_sequence",
         "vscreen_navigate",
         "vscreen_get_page_info",
         "vscreen_click",
-        "vscreen_double_click",
         "vscreen_type",
         "vscreen_key_press",
         "vscreen_key_combo",
@@ -155,59 +153,32 @@ async fn test_list_tools_returns_all() {
         "vscreen_drag",
         "vscreen_hover",
         "vscreen_wait",
-        "vscreen_wait_for_idle",
         "vscreen_execute_js",
         "vscreen_get_cursor_position",
-        // Phase 1a: Screenshot history
-        "vscreen_history_list",
-        "vscreen_history_get",
-        "vscreen_history_get_range",
-        "vscreen_history_clear",
+        // Phase 1a: Screenshot history (consolidated)
+        "vscreen_history",
         // Phase 1b: Session log
         "vscreen_session_log",
         "vscreen_session_summary",
-        // Phase 2a: Element discovery
-        "vscreen_find_elements",
-        "vscreen_find_by_text",
-        // Phase 3a/3b: Wait conditions
-        "vscreen_wait_for_text",
-        "vscreen_wait_for_selector",
-        // Phase 2d: Annotated screenshot
-        "vscreen_screenshot_annotated",
-        // Phase 4a: Navigation
-        "vscreen_go_back",
-        "vscreen_go_forward",
-        "vscreen_reload",
+        // Phase 2a: Element discovery (consolidated)
+        "vscreen_find",
         "vscreen_extract_text",
         // Phase 1c: Console
         "vscreen_console_log",
         "vscreen_console_clear",
         // Phase 2c: Accessibility tree
         "vscreen_accessibility_tree",
-        // Phase 4c: Cookie/Storage
-        "vscreen_get_cookies",
-        "vscreen_set_cookie",
-        "vscreen_get_storage",
-        "vscreen_set_storage",
-        // Phase 3c/3d: Advanced wait conditions
-        "vscreen_wait_for_url",
-        "vscreen_wait_for_network_idle",
-        // Lock management
-        "vscreen_instance_lock",
-        "vscreen_instance_unlock",
-        "vscreen_instance_lock_status",
-        "vscreen_instance_lock_renew",
-        // New high-impact tools
-        "vscreen_click_element",
-        "vscreen_batch_click",
+        // Phase 4c: Cookie/Storage (consolidated)
+        "vscreen_storage",
+        // Lock management (consolidated)
+        "vscreen_lock",
+        // New high-impact tools (click consolidated into vscreen_click)
         "vscreen_dismiss_dialogs",
         "vscreen_fill",
         "vscreen_select_option",
         "vscreen_scroll_to_element",
         "vscreen_list_frames",
-        // Navigation and input discovery
-        "vscreen_find_input",
-        "vscreen_click_and_navigate",
+        // Navigation
         "vscreen_dismiss_ads",
         // Self-documentation
         "vscreen_help",
@@ -222,6 +193,18 @@ async fn test_list_tools_returns_all() {
         "vscreen_solve_captcha",
         // Task planning
         "vscreen_plan",
+        // Synthesis tools (consolidated)
+        "vscreen_synthesis_manage",
+        "vscreen_synthesis_scrape",
+        "vscreen_synthesis_scrape_and_create",
+        // Workflow tools (Layer-1)
+        "vscreen_browse",
+        "vscreen_observe",
+        "vscreen_extract",
+        // Workflow interact tools
+        "vscreen_interact",
+        "vscreen_synthesize",
+        "vscreen_solve_challenge",
     ];
 
     for name in &expected {
@@ -442,8 +425,8 @@ test_no_supervisor!(
 
 test_no_supervisor!(
     test_screenshot_sequence_no_supervisor,
-    "vscreen_screenshot_sequence",
-    serde_json::json!({"instance_id": "no-sup", "count": 2, "interval_ms": 100})
+    "vscreen_screenshot",
+    serde_json::json!({"instance_id": "no-sup", "sequence_count": 2, "sequence_interval_ms": 100})
 );
 
 test_no_supervisor!(
@@ -454,8 +437,8 @@ test_no_supervisor!(
 
 test_no_supervisor!(
     test_double_click_no_supervisor,
-    "vscreen_double_click",
-    serde_json::json!({"instance_id": "no-sup", "x": 50, "y": 50})
+    "vscreen_click",
+    serde_json::json!({"instance_id": "no-sup", "mode": "double", "x": 50, "y": 50})
 );
 
 test_no_supervisor!(
@@ -524,6 +507,18 @@ test_no_supervisor!(
     serde_json::json!({"instance_id": "no-sup", "timeout_ms": 100})
 );
 
+test_no_supervisor!(
+    test_synthesis_scrape_batch_no_supervisor,
+    "vscreen_synthesis_scrape",
+    serde_json::json!({"mode": "batch", "instance_id": "no-sup", "urls": [{"url": "https://example.com"}]})
+);
+
+test_no_supervisor!(
+    test_synthesis_scrape_and_create_no_supervisor,
+    "vscreen_synthesis_scrape_and_create",
+    serde_json::json!({"instance_id": "no-sup", "title": "Test", "urls": [{"url": "https://example.com"}]})
+);
+
 // ===========================================================================
 // D) Parameter validation tests
 // ===========================================================================
@@ -589,10 +584,10 @@ test_invalid_params!(
 );
 
 test_invalid_params!(
-    test_screenshot_sequence_missing_count,
-    "vscreen_screenshot_sequence",
-    serde_json::json!({"instance_id": "dev", "interval_ms": 100}),
-    "screenshot_sequence without count should fail"
+    test_screenshot_sequence_missing_interval,
+    "vscreen_screenshot",
+    serde_json::json!({"instance_id": "dev", "sequence_count": 2}),
+    "screenshot sequence without sequence_interval_ms should fail"
 );
 
 test_invalid_params!(
@@ -602,11 +597,27 @@ test_invalid_params!(
     "drag without to_x/to_y should fail"
 );
 
+// Consolidated vscreen_wait defaults condition="duration" with duration_ms=1000 when omitted,
+// so an empty {} is valid. Test that a bad condition is rejected instead.
 test_invalid_params!(
     test_wait_missing_duration,
     "vscreen_wait",
-    serde_json::json!({}),
-    "wait without duration_ms should fail"
+    serde_json::json!({"condition": "text"}),
+    "wait with condition=text but no text should fail"
+);
+
+test_invalid_params!(
+    test_synthesis_scrape_batch_missing_urls,
+    "vscreen_synthesis_scrape",
+    serde_json::json!({"mode": "batch", "instance_id": "dev"}),
+    "scrape mode=batch without urls should fail"
+);
+
+test_invalid_params!(
+    test_synthesis_scrape_and_create_missing_title,
+    "vscreen_synthesis_scrape_and_create",
+    serde_json::json!({"instance_id": "dev", "urls": [{"url": "https://example.com"}]}),
+    "scrape_and_create without title should fail"
 );
 
 #[tokio::test]
@@ -759,8 +770,8 @@ async fn test_history_list_no_supervisor() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_history_list",
-            serde_json::json!({"instance_id": "hist"}),
+            "vscreen_history",
+            serde_json::json!({"instance_id": "hist", "action": "list"}),
         ))
         .await;
     assert!(result.is_err() || result.unwrap().is_error.unwrap_or(false));
@@ -773,8 +784,8 @@ async fn test_history_get_no_supervisor() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_history_get",
-            serde_json::json!({"instance_id": "nope", "index": 0}),
+            "vscreen_history",
+            serde_json::json!({"instance_id": "nope", "action": "get", "index": 0}),
         ))
         .await;
     assert!(result.is_err());
@@ -810,27 +821,13 @@ async fn test_session_summary_no_supervisor() {
 }
 
 #[tokio::test]
-async fn test_find_elements_no_supervisor() {
+async fn test_find_no_supervisor() {
     let harness = McpTestHarness::start().await;
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_find_elements",
-            serde_json::json!({"instance_id": "nope", "selector": "button"}),
-        ))
-        .await;
-    assert!(result.is_err());
-    harness.shutdown().await;
-}
-
-#[tokio::test]
-async fn test_find_by_text_no_supervisor() {
-    let harness = McpTestHarness::start().await;
-    let result = harness
-        .client
-        .call_tool(McpTestHarness::call_args(
-            "vscreen_find_by_text",
-            serde_json::json!({"instance_id": "nope", "text": "Submit"}),
+            "vscreen_find",
+            serde_json::json!({"instance_id": "nope", "by": "selector", "selector": "button"}),
         ))
         .await;
     assert!(result.is_err());
@@ -927,8 +924,8 @@ async fn test_get_cookies_no_supervisor() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_get_cookies",
-            serde_json::json!({"instance_id": "nope"}),
+            "vscreen_storage",
+            serde_json::json!({"instance_id": "nope", "type": "cookie", "action": "get"}),
         ))
         .await;
     assert!(result.is_err());
@@ -941,8 +938,8 @@ async fn test_set_cookie_no_supervisor() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_set_cookie",
-            serde_json::json!({"instance_id": "nope", "name": "k", "value": "v"}),
+            "vscreen_storage",
+            serde_json::json!({"instance_id": "nope", "type": "cookie", "action": "set", "name": "k", "value": "v"}),
         ))
         .await;
     assert!(result.is_err());
@@ -955,8 +952,8 @@ async fn test_get_storage_no_supervisor() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_get_storage",
-            serde_json::json!({"instance_id": "nope", "key": "k"}),
+            "vscreen_storage",
+            serde_json::json!({"instance_id": "nope", "type": "local", "action": "get", "key": "k"}),
         ))
         .await;
     assert!(result.is_err());
@@ -969,8 +966,8 @@ async fn test_set_storage_no_supervisor() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_set_storage",
-            serde_json::json!({"instance_id": "nope", "key": "k", "value": "v"}),
+            "vscreen_storage",
+            serde_json::json!({"instance_id": "nope", "type": "local", "action": "set", "key": "k", "value": "v"}),
         ))
         .await;
     assert!(result.is_err());
@@ -997,8 +994,8 @@ async fn test_annotated_screenshot_no_supervisor() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_screenshot_annotated",
-            serde_json::json!({"instance_id": "nope"}),
+            "vscreen_screenshot",
+            serde_json::json!({"instance_id": "nope", "annotate": true}),
         ))
         .await;
     assert!(result.is_err());
@@ -1035,13 +1032,13 @@ async fn test_wait_for_network_idle_no_supervisor() {
 
 // Missing required params validation
 #[tokio::test]
-async fn test_find_elements_missing_selector() {
+async fn test_find_selector_missing_selector() {
     let harness = McpTestHarness::start().await;
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_find_elements",
-            serde_json::json!({"instance_id": "dev"}),
+            "vscreen_find",
+            serde_json::json!({"instance_id": "dev", "by": "selector"}),
         ))
         .await;
     assert!(result.is_err());
@@ -1068,8 +1065,8 @@ async fn test_history_get_missing_index() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_history_get",
-            serde_json::json!({"instance_id": "dev"}),
+            "vscreen_history",
+            serde_json::json!({"instance_id": "dev", "action": "get"}),
         ))
         .await;
     assert!(result.is_err());
@@ -1088,8 +1085,8 @@ async fn test_lock_acquire_and_release() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock",
-            serde_json::json!({"instance_id": "lock-test"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "acquire", "instance_id": "lock-test"}),
         ))
         .await
         .expect("lock should succeed");
@@ -1099,8 +1096,8 @@ async fn test_lock_acquire_and_release() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_unlock",
-            serde_json::json!({"instance_id": "lock-test"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "release", "instance_id": "lock-test"}),
         ))
         .await
         .expect("unlock should succeed");
@@ -1119,8 +1116,8 @@ async fn test_lock_status_shows_holder() {
     harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock",
-            serde_json::json!({"instance_id": "status-test", "agent_name": "test-agent"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "acquire", "instance_id": "status-test", "agent_name": "test-agent"}),
         ))
         .await
         .expect("lock");
@@ -1129,8 +1126,8 @@ async fn test_lock_status_shows_holder() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock_status",
-            serde_json::json!({"instance_id": "status-test"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "status", "instance_id": "status-test"}),
         ))
         .await
         .expect("status");
@@ -1149,8 +1146,8 @@ async fn test_lock_renew_extends_ttl() {
     harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock",
-            serde_json::json!({"instance_id": "renew-test", "ttl_seconds": 30}),
+            "vscreen_lock",
+            serde_json::json!({"action": "acquire", "instance_id": "renew-test", "ttl_seconds": 30}),
         ))
         .await
         .expect("lock");
@@ -1158,8 +1155,8 @@ async fn test_lock_renew_extends_ttl() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock_renew",
-            serde_json::json!({"instance_id": "renew-test", "ttl_seconds": 300}),
+            "vscreen_lock",
+            serde_json::json!({"action": "renew", "instance_id": "renew-test", "ttl_seconds": 300}),
         ))
         .await
         .expect("renew");
@@ -1177,8 +1174,8 @@ async fn test_unlock_without_lock_fails() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_unlock",
-            serde_json::json!({"instance_id": "no-lock"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "release", "instance_id": "no-lock"}),
         ))
         .await;
     assert!(result.is_err(), "unlock without lock should fail");
@@ -1193,8 +1190,8 @@ async fn test_renew_without_lock_fails() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock_renew",
-            serde_json::json!({"instance_id": "no-lock"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "renew", "instance_id": "no-lock"}),
         ))
         .await;
     assert!(result.is_err(), "renew without lock should fail");
@@ -1208,8 +1205,9 @@ async fn test_lock_status_all_instances() {
 
     let result = harness
         .client
-        .call_tool(McpTestHarness::call_no_args(
-            "vscreen_instance_lock_status",
+        .call_tool(McpTestHarness::call_args(
+            "vscreen_lock",
+            serde_json::json!({"action": "status"}),
         ))
         .await
         .expect("status all should work");
@@ -1227,8 +1225,8 @@ async fn test_lock_observer_type() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock",
-            serde_json::json!({"instance_id": "obs-test", "lock_type": "observer"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "acquire", "instance_id": "obs-test", "lock_type": "observer"}),
         ))
         .await
         .expect("observer lock");
@@ -1247,8 +1245,8 @@ async fn test_lock_invalid_type_rejected() {
     let result = harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock",
-            serde_json::json!({"instance_id": "bad-type", "lock_type": "invalid"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "acquire", "instance_id": "bad-type", "lock_type": "invalid"}),
         ))
         .await;
     assert!(result.is_err(), "invalid lock type should fail");
@@ -1275,8 +1273,8 @@ async fn test_tool_requires_lock() {
     harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock",
-            serde_json::json!({"instance_id": "guard-test"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "acquire", "instance_id": "guard-test"}),
         ))
         .await
         .expect("lock");
@@ -1302,8 +1300,8 @@ async fn test_list_instances_shows_lock_info() {
     harness
         .client
         .call_tool(McpTestHarness::call_args(
-            "vscreen_instance_lock",
-            serde_json::json!({"instance_id": "list-lock", "agent_name": "my-agent"}),
+            "vscreen_lock",
+            serde_json::json!({"action": "acquire", "instance_id": "list-lock", "agent_name": "my-agent"}),
         ))
         .await
         .expect("lock");
@@ -1365,7 +1363,8 @@ async fn test_advisor_hint_on_repeated_waits() {
         "repeated waits should trigger advisor hint: {all3}"
     );
     assert!(
-        all3.contains("wait_for_text") || all3.contains("wait_for_selector"),
+        all3.contains("condition=\"text\"") || all3.contains("condition=\"selector\"")
+            || all3.contains("wait_for_text") || all3.contains("wait_for_selector"),
         "should recommend targeted waits: {all3}"
     );
 
